@@ -120,6 +120,7 @@
 <div class="app">
   <header class="topbar">
     <div class="brand">
+      <img class="mark" src="/logo.png" alt="" width="191" height="256" />
       <span class="live-dot" class:stale></span>
       <h1>Market Watcher</h1>
       <span class="tag">EMA 50 / 200</span>

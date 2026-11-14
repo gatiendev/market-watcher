@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect x="0" y="0" width="1024" height="1024" fill="#000000"/>
+  <g stroke-linecap="round">
+    <!-- GREEN  open 700  close 420 -->
+    <line x1="352" y1="372" x2="352" y2="762" stroke="#16c784" stroke-width="26"/>
+    <rect x="298" y="420" width="108" height="280" rx="26" fill="#16c784"/>
+    <!-- RED    open 420  close 600 -->
+    <line x1="512" y1="378" x2="512" y2="654" stroke="#ea3943" stroke-width="26"/>
+    <rect x="458" y="420" width="108" height="180" rx="26" fill="#ea3943"/>
+    <!-- GREEN  open 600  close 260 -->
+    <line x1="672" y1="204" x2="672" y2="648" stroke="#16c784" stroke-width="26"/>
+    <rect x="618" y="260" width="108" height="340" rx="26" fill="#16c784"/>
+  </g>
+</svg>

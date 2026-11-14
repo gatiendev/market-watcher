@@ -111,6 +111,13 @@ button {
   min-width: 0;
 }
 
+.brand .mark {
+  height: 30px;
+  width: auto;
+  flex: none;
+  display: block;
+}
+
 .brand h1 {
   font-size: 15px;
   letter-spacing: 0.02em;
@@ -679,6 +686,10 @@ table.watch thead th.trend-head {
   .controls {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .brand .mark {
+    height: 26px;
   }
 
   .brand h1 {
