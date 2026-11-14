@@ -4,7 +4,9 @@ import {
   candlesPath,
   fetchCandles,
   fetchMarkets,
+  fetchPivots,
   marketsPath,
+  pivotsPath,
   refreshPath,
   triggerRefresh,
 } from './api.js';
@@ -24,6 +26,11 @@ afterEach(() => {
 });
 
 describe('paths', () => {
+  it('builds the pivot query with the lookback', () => {
+    expect(pivotsPath('btcusdt', 5)).toBe('/api/pivots?symbol=BTCUSDT&lookback=5');
+    expect(pivotsPath('ES1')).toBe('/api/pivots?symbol=ES1&lookback=15');
+  });
+
   it('builds the candle query', () => {
     const path = candlesPath('solusdt', 'h4', 200);
     expect(path).toBe('/api/candles?symbol=SOLUSDT&timeframe=H4&limit=200');
@@ -68,5 +75,14 @@ describe('fetchMarkets', () => {
     const fn = mockFetch({ body: { reports: [] } });
     await triggerRefresh('BTCUSDT');
     expect(fn).toHaveBeenCalledWith('/api/refresh?symbol=BTCUSDT', expect.objectContaining({ method: 'POST' }));
+  });
+});
+
+describe('fetchPivots', () => {
+  it('requests the daily pivots for a symbol', async () => {
+    const fn = mockFetch({ body: { pivots: [{ kind: 'high', price: 12, time: 1 }] } });
+    const payload = await fetchPivots('solusdt', 5);
+    expect(fn.mock.calls[0][0]).toBe('/api/pivots?symbol=SOLUSDT&lookback=5');
+    expect(payload.pivots).toHaveLength(1);
   });
 });

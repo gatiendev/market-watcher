@@ -11,7 +11,8 @@ use common::{day_start, test_db, trend_bars, FakeSource, FixedResolver};
 use http_body_util::BodyExt;
 use market_watcher::api::{self, AppState};
 use market_watcher::ingest::{sync_series, Engine};
-use market_watcher::models::{find_symbol, Timeframe};
+use market_watcher::db;
+use market_watcher::models::{find_symbol, Candle, Timeframe};
 use serde_json::Value;
 use sqlx::SqlitePool;
 use tower::ServiceExt;
@@ -275,4 +276,93 @@ async fn refresh_rejects_an_unknown_symbol() {
     let app = build_app(db_handle.pool.clone(), FakeSource::new(Vec::new()));
     let (status, _) = call(&app, "POST", "/api/refresh?symbol=GBPJPY").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+/// Nine daily bars: peak at index 2 (high 16), trough at 4 (low 8), peak at 6 (17).
+async fn seed_zigzag(pool: &SqlitePool) {
+    let closes = [10.0, 12.0, 15.0, 12.0, 9.0, 12.0, 16.0, 12.0, 7.0];
+    let bars: Vec<Candle> = closes
+        .iter()
+        .enumerate()
+        .map(|(idx, close)| {
+            Candle::new(
+                day_start() + idx as i64 * Timeframe::D1.bucket_ms(),
+                *close,
+                close + 1.0,
+                close - 1.0,
+                *close,
+                10.0,
+            )
+        })
+        .collect();
+    db::upsert_candles(pool, "BTCUSDT", Timeframe::D1, &bars)
+        .await
+        .expect("seed daily bars");
+}
+
+#[tokio::test]
+async fn pivots_returns_daily_swing_highs_and_lows() {
+    let db_handle = test_db().await;
+    seed_zigzag(&db_handle.pool).await;
+    let app = build_app(db_handle.pool.clone(), FakeSource::new(Vec::new()));
+
+    let (status, body) = call(&app, "GET", "/api/pivots?symbol=BTCUSDT&lookback=2").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["symbol"], "BTCUSDT");
+    assert_eq!(body["timeframe"], "D1", "pivots are always measured on daily bars");
+    assert_eq!(body["left"], 2);
+    assert_eq!(body["right"], 2);
+    assert_eq!(body["bars"], 9);
+
+    let pivots = body["pivots"].as_array().unwrap();
+    let shape: Vec<(String, f64)> = pivots
+        .iter()
+        .map(|p| {
+            (
+                p["kind"].as_str().unwrap().to_string(),
+                p["price"].as_f64().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        shape,
+        vec![
+            ("high".to_string(), 16.0),
+            ("low".to_string(), 8.0),
+            ("high".to_string(), 17.0),
+        ]
+    );
+    assert_eq!(pivots[0]["time"].as_i64().unwrap(), day_start() / 1000 + 2 * 86_400);
+    assert_eq!(pivots[1]["bar"].as_u64().unwrap(), 4);
+}
+
+#[tokio::test]
+async fn pivots_default_to_fifteen_bars_each_side_and_clamp_requests() {
+    let db_handle = test_db().await;
+    seed_zigzag(&db_handle.pool).await;
+    let app = build_app(db_handle.pool.clone(), FakeSource::new(Vec::new()));
+
+    let (status, body) = call(&app, "GET", "/api/pivots?symbol=BTCUSDT").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["left"], 15);
+    assert_eq!(body["right"], 15);
+    assert!(body["pivots"].as_array().unwrap().is_empty(), "9 bars cannot hold a 15/15 pivot");
+
+    let (_, body) = call(&app, "GET", "/api/pivots?symbol=BTCUSDT&lookback=0").await;
+    assert_eq!(body["left"], 1, "a zero lookback falls back to the minimum");
+    let (_, body) = call(&app, "GET", "/api/pivots?symbol=BTCUSDT&lookback=999").await;
+    assert_eq!(body["left"], 60, "the lookback is capped");
+    let (_, body) = call(&app, "GET", "/api/pivots?symbol=BTCUSDT&left=1&right=1").await;
+    assert_eq!(body["left"], 1);
+    assert_eq!(body["right"], 1);
+    assert_eq!(body["pivots"].as_array().unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn pivots_rejects_unknown_symbols() {
+    let db_handle = test_db().await;
+    let app = build_app(db_handle.pool.clone(), FakeSource::new(Vec::new()));
+    let (status, body) = call(&app, "GET", "/api/pivots?symbol=DOGE").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(body["error"].as_str().unwrap().contains("unknown symbol"));
 }

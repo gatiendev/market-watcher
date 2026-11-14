@@ -24,6 +24,14 @@ export function candlesPath(symbol, timeframe, limit = 400) {
   return `/api/candles?${params.toString()}`;
 }
 
+export function pivotsPath(symbol, lookback = 15) {
+  const params = new URLSearchParams({
+    symbol: String(symbol || '').toUpperCase(),
+    lookback: String(lookback),
+  });
+  return `/api/pivots?${params.toString()}`;
+}
+
 export function refreshPath(symbol) {
   return symbol ? `/api/refresh?symbol=${encodeURIComponent(String(symbol).toUpperCase())}` : '/api/refresh';
 }
@@ -65,6 +73,10 @@ export function fetchMarkets(signal) {
 
 export function fetchCandles(symbol, timeframe, limit = 400, signal) {
   return request(candlesPath(symbol, timeframe, limit), { signal });
+}
+
+export function fetchPivots(symbol, lookback = 15, signal) {
+  return request(pivotsPath(symbol, lookback), { signal });
 }
 
 export function triggerRefresh(symbol, signal) {

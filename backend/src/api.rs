@@ -16,7 +16,8 @@ use tower_http::trace::TraceLayer;
 use crate::db;
 use crate::indicators::pct_change;
 use crate::ingest::{Engine, RefreshReport};
-use crate::models::{find_symbol, SymbolSpec, Timeframe, SYMBOLS};
+use crate::models::{find_symbol, Candle, SymbolSpec, Timeframe, SYMBOLS};
+use crate::pivots::{find_pivots, DEFAULT_LOOKBACK, MAX_LOOKBACK, MIN_LOOKBACK};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -90,6 +91,32 @@ pub struct RefreshResponse {
     pub reports: Vec<RefreshReport>,
 }
 
+/// One daily swing point, in the shape the chart wants it.
+#[derive(Debug, Clone, Serialize)]
+pub struct PivotPoint {
+    /// Epoch seconds of the pivot bar (what the charting library expects).
+    pub time: i64,
+    pub price: f64,
+    /// "high" or "low".
+    pub kind: String,
+    /// Index of the bar inside the daily series, oldest first.
+    pub bar: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PivotsResponse {
+    pub symbol: String,
+    pub label: String,
+    pub decimals: u8,
+    /// Pivots are always measured on the daily series, whatever the chart shows.
+    pub timeframe: String,
+    /// Bars required each side of the pivot bar.
+    pub left: usize,
+    pub right: usize,
+    pub bars: i64,
+    pub pivots: Vec<PivotPoint>,
+}
+
 pub struct ApiError {
     status: StatusCode,
     message: String,
@@ -151,11 +178,21 @@ pub struct RefreshQuery {
     pub symbol: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct PivotsQuery {
+    pub symbol: Option<String>,
+    /// Shorthand for `left` and `right` together.
+    pub lookback: Option<usize>,
+    pub left: Option<usize>,
+    pub right: Option<usize>,
+}
+
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/health", get(health))
         .route("/api/markets", get(markets))
         .route("/api/candles", get(candles))
+        .route("/api/pivots", get(pivot_points))
         .route("/api/refresh", post(refresh))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
@@ -249,6 +286,59 @@ async fn candles(
         decimals: spec.decimals,
         points,
         summary,
+    }))
+}
+
+/// Daily pivot highs and lows: the swing points a trader draws support and
+/// resistance from. `lookback` (or `left`/`right`) sets how many daily bars the
+/// pivot must beat on each side; the default 15 finds major swings, 5 finds many
+/// minors.
+async fn pivot_points(
+    State(state): State<AppState>,
+    Query(query): Query<PivotsQuery>,
+) -> Result<Json<PivotsResponse>, ApiError> {
+    let spec = query
+        .symbol
+        .as_deref()
+        .and_then(find_symbol)
+        .ok_or_else(|| ApiError::not_found("unknown symbol"))?;
+
+    let lookback = query
+        .lookback
+        .unwrap_or(DEFAULT_LOOKBACK)
+        .clamp(MIN_LOOKBACK, MAX_LOOKBACK);
+    let left = query
+        .left
+        .unwrap_or(lookback)
+        .clamp(MIN_LOOKBACK, MAX_LOOKBACK);
+    let right = query
+        .right
+        .unwrap_or(lookback)
+        .clamp(MIN_LOOKBACK, MAX_LOOKBACK);
+
+    // Pivots read the whole daily series, not the chart window: a level found
+    // three years back is still a level.
+    let series = db::load_series(&state.pool, spec.symbol, Timeframe::D1, 5000).await?;
+    let bars: Vec<Candle> = series.into_iter().map(|row| row.candle).collect();
+    let found = find_pivots(&bars, left, right);
+
+    Ok(Json(PivotsResponse {
+        symbol: spec.symbol.to_string(),
+        label: spec.label.to_string(),
+        decimals: spec.decimals,
+        timeframe: Timeframe::D1.as_str().to_string(),
+        left,
+        right,
+        bars: bars.len() as i64,
+        pivots: found
+            .into_iter()
+            .map(|pivot| PivotPoint {
+                time: pivot.open_time.div_euclid(1000),
+                price: pivot.price,
+                kind: pivot.kind.as_str().to_string(),
+                bar: pivot.index,
+            })
+            .collect(),
     }))
 }
 

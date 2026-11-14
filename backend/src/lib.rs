@@ -6,6 +6,7 @@ pub mod db;
 pub mod indicators;
 pub mod ingest;
 pub mod models;
+pub mod pivots;
 pub mod providers;
 
 use std::sync::Arc;

@@ -1,9 +1,17 @@
 <script>
   import { onMount } from 'svelte';
-  import { ColorType, CrosshairMode, createChart } from 'lightweight-charts';
+  import { ColorType, CrosshairMode, LineStyle, createChart } from 'lightweight-charts';
   import { toCandles, toLine, toVolume } from './format.js';
+  import { keyLevels, pivotMarkers } from './pivots.js';
 
-  let { points = [], decimals = 2, timeframe = 'H4', resetKey = '' } = $props();
+  let {
+    points = [],
+    decimals = 2,
+    timeframe = 'H4',
+    resetKey = '',
+    pivots = [],
+    showPivots = false,
+  } = $props();
 
   const COLORS = {
     up: '#16c784',
@@ -19,6 +27,7 @@
   let chart = null;
   let series = null;
   let renderedKey = '';
+  let levelLines = [];
 
   function priceFormat() {
     return { type: 'price', precision: decimals, minMove: Number(`0.${'0'.repeat(Math.max(0, decimals - 1))}1`) };
@@ -103,14 +112,70 @@
       chart = null;
       series = null;
       renderedKey = '';
+      levelLines = [];
     };
   });
+
+  function clearLevels() {
+    for (const line of levelLines) {
+      try {
+        series.candles.removePriceLine(line);
+      } catch {
+        // The series is gone; the chart it belonged to has been removed.
+      }
+    }
+    levelLines = [];
+  }
+
+  /**
+   * Draw the daily swings: a marker on each pivot bar plus dashed price lines at
+   * the handful of levels nearest the last price, labelled R (resistance) and S
+   * (support) on the price axis.
+   */
+  function applyPivots(bars, swings, visible) {
+    clearLevels();
+    if (!visible || swings.length === 0) {
+      series.candles.setMarkers([]);
+      return;
+    }
+
+    const markers = pivotMarkers(swings, bars.map((bar) => bar.time));
+    series.candles.setMarkers(
+      markers.map((pivot) => ({
+        time: pivot.time,
+        position: pivot.kind === 'high' ? 'aboveBar' : 'belowBar',
+        color: pivot.kind === 'high' ? COLORS.down : COLORS.up,
+        shape: pivot.kind === 'high' ? 'arrowDown' : 'arrowUp',
+        size: 0.8,
+      })),
+    );
+
+    const lastClose = bars.length ? bars[bars.length - 1].close : null;
+    for (const level of keyLevels(swings, lastClose).all) {
+      // Above the price is resistance whatever swing made it: an old pivot low
+      // becomes resistance once price falls under it.
+      const resistance = !Number.isFinite(lastClose) || level.price > lastClose;
+      const tag = resistance ? 'R' : 'S';
+      levelLines.push(
+        series.candles.createPriceLine({
+          price: level.price,
+          color: resistance ? 'rgba(234, 57, 67, 0.55)' : 'rgba(22, 199, 132, 0.55)',
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: level.touches > 1 ? `${tag} ×${level.touches}` : tag,
+        }),
+      );
+    }
+  }
 
   // Push new data whenever the parent hands us a fresh series.
   $effect(() => {
     const data = points;
     const key = resetKey;
     const precision = decimals;
+    const swings = pivots;
+    const visible = showPivots;
 
     if (!chart || !series) return;
 
@@ -127,6 +192,8 @@
     series.ema50.setData(toLine(data, 'ema50'));
     series.ema200.setData(toLine(data, 'ema200'));
     series.volume.setData(toVolume(data));
+
+    applyPivots(data, swings, visible);
 
     // Re-fit only when the instrument or timeframe changes, so a background
     // refresh never yanks the user's zoom away.
