@@ -7,6 +7,11 @@ const proxyTarget = process.env.VITE_PROXY_TARGET || 'http://127.0.0.1:8791';
 
 export default defineConfig({
   plugins: [svelte()],
+  // Svelte ships a server build under the default (node) condition; tests mount
+  // components in jsdom, so resolution has to pick the browser build.
+  resolve: {
+    conditions: ['browser', 'module', 'import', 'default'],
+  },
   server: {
     port: 8790,
     strictPort: true,

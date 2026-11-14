@@ -366,3 +366,61 @@ async fn pivots_rejects_unknown_symbols() {
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert!(body["error"].as_str().unwrap().contains("unknown symbol"));
 }
+
+/// Switching instruments or timeframes must never return another series: each
+/// symbol keeps its own candles and its own daily pivots.
+#[tokio::test]
+async fn switching_symbols_and_timeframes_never_mixes_series() {
+    let db_handle = test_db().await;
+    let sol = find_symbol("SOLUSDT").unwrap();
+    let btc = find_symbol("BTCUSDT").unwrap();
+
+    let sol_h4 = FakeSource::new(trend_bars(40, day_start(), Timeframe::H4.bucket_ms(), 10.0, 0.1));
+    sync_series(&db_handle.pool, &sol_h4, sol, Timeframe::H4).await;
+    let btc_h4 = FakeSource::new(trend_bars(40, day_start(), Timeframe::H4.bucket_ms(), 100.0, 0.5));
+    sync_series(&db_handle.pool, &btc_h4, btc, Timeframe::H4).await;
+    let sol_d1 = FakeSource::new(trend_bars(40, day_start(), Timeframe::D1.bucket_ms(), 1000.0, 1.0));
+    sync_series(&db_handle.pool, &sol_d1, sol, Timeframe::D1).await;
+
+    let app = build_app(db_handle.pool.clone(), FakeSource::new(Vec::new()));
+
+    for (symbol, timeframe, base, bucket) in [
+        ("SOLUSDT", "H4", 10.0, Timeframe::H4.bucket_ms() / 1000),
+        ("BTCUSDT", "H4", 100.0, Timeframe::H4.bucket_ms() / 1000),
+        ("SOLUSDT", "D1", 1000.0, Timeframe::D1.bucket_ms() / 1000),
+        ("BTCUSDT", "H4", 100.0, Timeframe::H4.bucket_ms() / 1000),
+        ("SOLUSDT", "H4", 10.0, Timeframe::H4.bucket_ms() / 1000),
+        ("SOLUSDT", "D1", 1000.0, Timeframe::D1.bucket_ms() / 1000),
+    ] {
+        let path = format!("/api/candles?symbol={symbol}&timeframe={timeframe}&limit=20");
+        let (status, body) = call(&app, "GET", &path).await;
+        assert_eq!(status, StatusCode::OK, "{path}");
+        assert_eq!(body["symbol"], symbol, "{path}");
+        assert_eq!(body["timeframe"], timeframe, "{path}");
+
+        let points = body["points"].as_array().unwrap();
+        assert!(!points.is_empty(), "{path}");
+        let first = points[0]["close"].as_f64().unwrap();
+        assert!(
+            (first - base).abs() < base * 0.3,
+            "{path}: first close {first} is not {symbol} {timeframe} data"
+        );
+        let step = points[1]["time"].as_i64().unwrap() - points[0]["time"].as_i64().unwrap();
+        assert_eq!(step, bucket, "{path}: bars are not {timeframe} buckets");
+    }
+
+    // Pivots follow the instrument too, never the previously viewed one.
+    for (symbol, low, high) in [("SOLUSDT", 9.0, 12.0), ("BTCUSDT", 95.0, 125.0)] {
+        let (status, body) =
+            call(&app, "GET", &format!("/api/pivots?symbol={symbol}&lookback=5")).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["symbol"], symbol);
+        for pivot in body["pivots"].as_array().unwrap() {
+            let price = pivot["price"].as_f64().unwrap();
+            assert!(
+                price >= low && price <= high,
+                "{symbol} pivot {price} belongs to another instrument"
+            );
+        }
+    }
+}

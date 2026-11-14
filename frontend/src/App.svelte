@@ -45,6 +45,9 @@
   let pivotsOn = $state(false);
   let lookback = $state(PIVOT_DEFAULT);
   let pivots = $state([]);
+  // Which symbol the pivots in hand belong to; anything else must never reach the
+  // chart, or switching symbols would draw one instrument's levels on another.
+  let pivotsSymbol = $state(null);
 
   let rows = $derived(sortSymbols(markets));
   let activeRow = $derived(rows.find((row) => row.symbol === selected) ?? null);
@@ -52,7 +55,9 @@
   let decimals = $derived(activeRow?.decimals ?? 2);
   let spread = $derived(emaSpread(snap?.ema50, snap?.ema200));
   let stale = $derived(!lastLoaded || now - lastLoaded > 5 * 60_000);
-  let levels = $derived(keyLevels(pivots, snap?.last_close ?? null));
+  // Only the swings of the symbol on screen are drawn.
+  let chartPivots = $derived(pivotsSymbol === selected ? pivots : []);
+  let levels = $derived(keyLevels(chartPivots, snap?.last_close ?? null));
   let resistance = $derived(levels.above[0] ?? null);
   let support = $derived(levels.below[0] ?? null);
 
@@ -114,8 +119,11 @@
       const payload = await fetchPivots(symbol, strength, controller.signal);
       if (controller.signal.aborted) return;
       pivots = payload.pivots ?? [];
+      pivotsSymbol = payload.symbol ?? symbol;
     } catch (err) {
-      if (err?.name !== 'AbortError') pivots = [];
+      if (err?.name === 'AbortError') return;
+      pivots = [];
+      pivotsSymbol = symbol;
     }
   }
 
@@ -292,7 +300,7 @@
             <span class="dist num">{formatPct(levelDistance(support.price, snap?.last_close))}</span>
           </span>
         {/if}
-        {#if pivots.length === 0}
+        {#if pivotsSymbol === selected && pivots.length === 0}
           <span class="level-empty">No pivots at {lookback}/side for this history</span>
         {/if}
       {/if}
@@ -309,7 +317,7 @@
       {points}
       {decimals}
       {timeframe}
-      {pivots}
+      pivots={chartPivots}
       showPivots={pivotsOn}
       resetKey={`${selected}-${timeframe}`}
     />
