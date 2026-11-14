@@ -128,7 +128,8 @@
   }
 
   /**
-   * Draw the daily swings: a marker on each pivot bar plus dashed price lines at
+   * Draw the daily swings: an arrow on the candle that made each swing (its high
+   * or low, never its close) plus dashed price lines at
    * the handful of levels nearest the last price, labelled R (resistance) and S
    * (support) on the price axis.
    */
@@ -139,7 +140,7 @@
       return;
     }
 
-    const markers = pivotMarkers(swings, bars.map((bar) => bar.time));
+    const markers = pivotMarkers(swings, bars);
     series.candles.setMarkers(
       markers.map((pivot) => ({
         time: pivot.time,

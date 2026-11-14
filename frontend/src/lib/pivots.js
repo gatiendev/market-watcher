@@ -19,15 +19,21 @@ function isFiniteNumber(value) {
 
 /** Greatest value in the ascending array `times` that is <= target, or null. */
 export function snapDown(times, target) {
-  if (!Array.isArray(times) || times.length === 0 || !isFiniteNumber(target)) return null;
-  if (target < times[0]) return null;
+  const index = snapIndex(times, target);
+  return index === -1 ? null : times[index];
+}
+
+/** Index of the greatest value in `times` that is <= target, or -1. */
+function snapIndex(times, target) {
+  if (!Array.isArray(times) || times.length === 0 || !isFiniteNumber(target)) return -1;
+  if (target < times[0]) return -1;
   let low = 0;
   let high = times.length - 1;
-  let best = null;
+  let best = -1;
   while (low <= high) {
     const mid = (low + high) >> 1;
     if (times[mid] <= target) {
-      best = times[mid];
+      best = mid;
       low = mid + 1;
     } else {
       high = mid - 1;
@@ -36,34 +42,64 @@ export function snapDown(times, target) {
   return best;
 }
 
-/**
- * Pivots mapped onto bar times the series really has, one marker per bar,
- * oldest first. Dropped pivots are the ones older than the first stored bar.
- */
-export function pivotMarkers(pivots, barTimes) {
-  if (!Array.isArray(pivots) || pivots.length === 0) return [];
-  if (!Array.isArray(barTimes) || barTimes.length === 0) return [];
+// How far past a daily pivot's timestamp to look for the bar that holds the
+// extreme: a day of H4 bars plus slack for exchange sessions that do not open at
+// midnight UTC.
+const EXTREME_WINDOW_MS = 32 * 3600;
 
-  const byTime = new Map();
-  for (const pivot of pivots) {
-    if (!pivot || !isFiniteNumber(pivot.price) || !isFiniteNumber(pivot.time)) continue;
-    const snapped = snapDown(barTimes, pivot.time);
-    if (snapped === null) continue;
-    const exact = snapped === pivot.time;
-    const previous = byTime.get(snapped);
-    // Two pivots landing on one bar: keep the exact hit, otherwise the first one.
-    if (previous && (previous.exact || !exact)) continue;
-    byTime.set(snapped, {
-      time: snapped,
-      price: pivot.price,
-      kind: pivot.kind === 'high' ? 'high' : 'low',
-      exact,
-    });
+/**
+ * The bar carrying the pivot's extreme, so the arrow sits on the actual spike
+ * candle (its high or low), not on whatever bar happens to start the day.
+ */
+function extremeBar(bars, times, from, pivot, kind, fallbackTime) {
+  const start = Math.max(0, snapIndex(times, from));
+  const limit = pivot.time + EXTREME_WINDOW_MS;
+  let best = null;
+
+  for (let index = start; index < bars.length; index += 1) {
+    const bar = bars[index];
+    if (!bar || !isFiniteNumber(bar.time)) continue;
+    if (bar.time > limit) break;
+    const extreme = kind === 'high' ? bar.high : bar.low;
+    if (!isFiniteNumber(extreme)) continue;
+    const gap = Math.abs(extreme - pivot.price);
+    const distance = Math.abs(bar.time - pivot.time);
+    if (
+      best === null ||
+      gap < best.gap - 1e-9 ||
+      (Math.abs(gap - best.gap) <= 1e-9 && distance < best.distance)
+    ) {
+      best = { time: bar.time, gap, distance };
+    }
   }
 
-  return [...byTime.values()]
-    .sort((a, b) => a.time - b.time)
-    .map(({ time, price, kind }) => ({ time, price, kind }));
+  return best ? best.time : fallbackTime;
+}
+
+/**
+ * Pivots mapped onto the bars that actually carry them, one marker per bar,
+ * oldest first. Dropped pivots are the ones older than the first stored bar.
+ */
+export function pivotMarkers(pivots, bars) {
+  if (!Array.isArray(pivots) || pivots.length === 0) return [];
+  if (!Array.isArray(bars) || bars.length === 0) return [];
+
+  const times = bars.map((bar) => bar.time);
+  const byTime = new Map();
+
+  for (const pivot of pivots) {
+    if (!pivot || !isFiniteNumber(pivot.price) || !isFiniteNumber(pivot.time)) continue;
+    const snapped = snapDown(times, pivot.time);
+    if (snapped === null) continue;
+
+    const kind = pivot.kind === 'high' ? 'high' : 'low';
+    const time = extremeBar(bars, times, snapped, pivot, kind, snapped);
+    // Two pivots landing on one bar: the first one wins, so markers never stack.
+    if (byTime.has(time)) continue;
+    byTime.set(time, { time, price: pivot.price, kind });
+  }
+
+  return [...byTime.values()].sort((a, b) => a.time - b.time);
 }
 
 /**

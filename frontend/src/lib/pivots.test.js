@@ -19,33 +19,78 @@ describe('snapDown', () => {
 });
 
 describe('pivotMarkers', () => {
-  it('snaps a daily pivot onto the H4 bar that starts at or before it', () => {
-    const pivot = { time: barTimes[5] + 90 * 60, price: 12.5, kind: 'high' };
-    expect(pivotMarkers([pivot], barTimes)).toEqual([
-      { time: barTimes[5], price: 12.5, kind: 'high' },
-    ]);
+  const T0 = barTimes[0];
+  // Four H4 bars per day: only the second one carries the day's high.
+  function barsAround(time, high, low, offsetIndex = 1) {
+    return Array.from({ length: 6 }, (_, idx) => {
+      const rising = idx === offsetIndex;
+      return {
+        time: time + idx * 4 * HOUR,
+        open: 10,
+        high: rising ? high : high - 1,
+        low: rising ? low : low + 1,
+        close: 10,
+      };
+    });
+  }
+
+  it('puts the marker on the bar that made the swing, not on the close', () => {
+    const bars = barsAround(T0, 12.5, 9.5);
+    const pivot = { time: T0, price: 12.5, kind: 'high' };
+    const markers = pivotMarkers([pivot], bars);
+    // Second bar of the day holds the high, so the arrow belongs there.
+    expect(markers).toEqual([{ time: T0 + 4 * HOUR, price: 12.5, kind: 'high' }]);
+  });
+
+  it('finds the swing low bar the same way', () => {
+    const bars = barsAround(T0, 12.5, 9.5, 3);
+    const pivot = { time: T0, price: 9.5, kind: 'low' };
+    expect(pivotMarkers([pivot], bars)[0].time).toBe(T0 + 12 * HOUR);
+  });
+
+  it('falls back to the closest bar when no bar matches the extreme exactly', () => {
+    // Resampled or rounded feeds: the daily high is 12.5 but the closest bar tops
+    // out at 12.4, so the arrow goes on that bar.
+    const bars = barsAround(T0, 12.5, 9.5).map((bar, idx) => ({
+      ...bar,
+      high: idx === 2 ? 12.4 : 12.0,
+    }));
+    const pivot = { time: T0, price: 12.5, kind: 'high' };
+    expect(pivotMarkers([pivot], bars)[0].time).toBe(T0 + 8 * HOUR);
+  });
+
+  it('keeps a daily pivot on its own daily bar', () => {
+    const dayBars = [
+      { time: T0, open: 10, high: 12.5, low: 9.5, close: 11 },
+      { time: T0 + DAY, open: 11, high: 11.5, low: 10, close: 10.5 },
+    ];
+    const pivot = { time: T0, price: 12.5, kind: 'high' };
+    expect(pivotMarkers([pivot], dayBars)).toEqual([{ time: T0, price: 12.5, kind: 'high' }]);
   });
 
   it('drops pivots older than the first stored bar', () => {
-    const pivot = { time: barTimes[0] - DAY, price: 9, kind: 'low' };
-    expect(pivotMarkers([pivot], barTimes)).toEqual([]);
+    const pivot = { time: T0 - DAY, price: 9, kind: 'low' };
+    expect(pivotMarkers([pivot], barsAround(T0, 12.5, 9.5))).toEqual([]);
   });
 
   it('keeps a single marker per bar, sorted oldest first', () => {
-    const pivots = [
-      { time: barTimes[10] + 60 * 60, price: 20, kind: 'high' },
-      { time: barTimes[10] + 30 * 60, price: 8, kind: 'low' },
-      { time: barTimes[2], price: 7, kind: 'low' },
+    const bars = [
+      ...barsAround(T0, 12, 8),
+      ...barsAround(T0 + DAY, 20, 6),
     ];
-    const markers = pivotMarkers(pivots, barTimes);
-    expect(markers.map((m) => m.time)).toEqual([barTimes[2], barTimes[10]]);
-    expect(markers[0]).toMatchObject({ kind: 'low', price: 7 });
+    const pivots = [
+      { time: T0 + DAY, price: 20, kind: 'high' },
+      { time: T0, price: 8, kind: 'low' },
+    ];
+    const markers = pivotMarkers(pivots, bars);
+    expect(markers.map((m) => m.time)).toEqual([T0 + 4 * HOUR, T0 + DAY + 4 * HOUR]);
+    expect(markers[0]).toMatchObject({ kind: 'low', price: 8 });
   });
 
   it('ignores junk and empty input', () => {
-    expect(pivotMarkers([], barTimes)).toEqual([]);
-    expect(pivotMarkers([{ time: null, price: 3 }], barTimes)).toEqual([]);
-    expect(pivotMarkers([{ time: barTimes[1], price: 3 }], [])).toEqual([]);
+    expect(pivotMarkers([], barsAround(T0, 12, 8))).toEqual([]);
+    expect(pivotMarkers([{ time: null, price: 3 }], barsAround(T0, 12, 8))).toEqual([]);
+    expect(pivotMarkers([{ time: T0, price: 3 }], [])).toEqual([]);
   });
 });
 
