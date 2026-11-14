@@ -8,6 +8,8 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tower_http::cors::CorsLayer;
@@ -90,6 +92,10 @@ pub struct CandlesResponse {
 pub struct RefreshResponse {
     pub reports: Vec<RefreshReport>,
 }
+
+/// How long a chart request may wait for its tail top-up before it is answered
+/// with whatever is stored.
+const TOP_UP_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// One daily swing point, in the shape the chart wants it.
 #[derive(Debug, Clone, Serialize)]
@@ -259,6 +265,10 @@ async fn candles(
         .and_then(Timeframe::parse)
         .ok_or_else(|| ApiError::bad_request("timeframe must be H4 or D1"))?;
 
+    // Opening a chart expects current bars: top up the tail first, fetching only
+    // the bars that are missing. Failures are ignored - stale data beats no data.
+    let _ = tokio::time::timeout(TOP_UP_TIMEOUT, state.engine.top_up(spec, timeframe)).await;
+
     let limit = query.limit.unwrap_or(320).clamp(10, 2000);
     let series = db::load_series(&state.pool, spec.symbol, timeframe, limit).await?;
 
@@ -315,6 +325,10 @@ async fn pivot_points(
         .right
         .unwrap_or(lookback)
         .clamp(MIN_LOOKBACK, MAX_LOOKBACK);
+
+    // Pivots are read from the daily series, so its tail has to be current too,
+    // otherwise yesterday's swing is missing from today's chart.
+    let _ = tokio::time::timeout(TOP_UP_TIMEOUT, state.engine.top_up(spec, Timeframe::D1)).await;
 
     // Pivots read the whole daily series, not the chart window: a level found
     // three years back is still a level.

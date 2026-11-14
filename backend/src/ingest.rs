@@ -1,6 +1,8 @@
 //! Sync orchestration: fetch -> store -> recompute EMAs -> record status.
 
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
 use serde::Serialize;
@@ -295,11 +297,71 @@ pub async fn recompute_indicators(
     db::replace_indicators(pool, spec.symbol, timeframe, &values).await
 }
 
+/// Milliseconds since the epoch, the clock every staleness check uses.
+pub fn now_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// Start of the bucket that is trading right now.
+pub fn open_bucket(now_ms: i64, timeframe: Timeframe) -> i64 {
+    now_ms.div_euclid(timeframe.bucket_ms()) * timeframe.bucket_ms()
+}
+
+/// True when the stored series is missing the bucket that should be trading now.
+/// An empty series counts as stale: every bar is missing.
+pub async fn tail_is_stale(
+    pool: &SqlitePool,
+    symbol: &str,
+    timeframe: Timeframe,
+    now_ms: i64,
+) -> bool {
+    match db::last_bar_time(pool, symbol, timeframe).await {
+        Ok(Some(last)) => last < open_bucket(now_ms, timeframe),
+        Ok(None) => true,
+        // A read failure is not evidence of stale data; leave the request alone.
+        Err(_) => false,
+    }
+}
+
+/// Store only the bars that follow the newest stored one - no history walk.
+///
+/// This is what an opened chart needs: the forming bar refreshed and whatever
+/// closed while nobody was looking, nothing more. The provider is asked from the
+/// newest stored bucket so its values are rewritten rather than skipped.
+pub async fn sync_tail(
+    pool: &SqlitePool,
+    source: &dyn CandleSource,
+    spec: &SymbolSpec,
+    timeframe: Timeframe,
+) -> Result<usize> {
+    let last_stored = db::last_bar_time(pool, spec.symbol, timeframe).await?;
+    let fetched = source.fetch(spec, timeframe, last_stored, None).await?;
+
+    let missing: Vec<Candle> = fetched
+        .into_iter()
+        .filter(|candle| last_stored.map_or(true, |last| candle.open_time >= last))
+        .collect();
+    if missing.is_empty() {
+        return Ok(0);
+    }
+
+    let written = db::upsert_candles(pool, spec.symbol, timeframe, &missing).await?;
+    // EMAs are chained from the start, so the tail cannot be patched on its own.
+    recompute_indicators(pool, spec, timeframe).await?;
+    Ok(written)
+}
+
 /// Shared refresh coordinator used by the HTTP layer and the background loop.
 pub struct Engine {
     pub pool: SqlitePool,
     pub sources: Arc<dyn SourceResolver>,
     refresh_lock: Mutex<()>,
+    /// Last tail top-up attempt per series, so a closed market or a dead provider
+    /// does not mean a fetch on every single request.
+    tail_attempts: Mutex<HashMap<(&'static str, &'static str), Instant>>,
 }
 
 impl Engine {
@@ -308,6 +370,7 @@ impl Engine {
             pool,
             sources,
             refresh_lock: Mutex::new(()),
+            tail_attempts: Mutex::new(HashMap::new()),
         }
     }
 
@@ -323,6 +386,51 @@ impl Engine {
             }
         }
         reports
+    }
+
+    /// Make one series current before it is served: fetch only the bars after the
+    /// newest stored one, and only when the tail is actually behind. Returns the
+    /// number of bars written, or `None` when there was nothing to do.
+    pub async fn top_up(&self, spec: &SymbolSpec, timeframe: Timeframe) -> Option<usize> {
+        const RETRY_AFTER: Duration = Duration::from_secs(20);
+
+        if !tail_is_stale(&self.pool, spec.symbol, timeframe, now_ms()).await {
+            return None;
+        }
+        // A full refresh is already doing this work; never queue behind it.
+        let _guard = self.refresh_lock.try_lock().ok()?;
+        {
+            let mut attempts = self.tail_attempts.lock().await;
+            let key = (spec.symbol, timeframe.as_str());
+            if let Some(previous) = attempts.get(&key) {
+                if previous.elapsed() < RETRY_AFTER {
+                    return None;
+                }
+            }
+            attempts.insert(key, Instant::now());
+        }
+
+        let source = self.sources.source_for(spec);
+        match sync_tail(&self.pool, source, spec, timeframe).await {
+            Ok(written) => {
+                tracing::info!(
+                    symbol = spec.symbol,
+                    tf = timeframe.as_str(),
+                    written,
+                    "chart tail topped up"
+                );
+                Some(written)
+            }
+            Err(err) => {
+                tracing::warn!(
+                    symbol = spec.symbol,
+                    tf = timeframe.as_str(),
+                    error = format!("{err:#}"),
+                    "chart tail top-up failed"
+                );
+                None
+            }
+        }
     }
 
     /// Refresh one symbol on both timeframes (used by the UI's per-symbol retry).

@@ -4,7 +4,7 @@
 #![allow(dead_code)]
 
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -191,18 +191,25 @@ impl CandleSource for FakeSource {
 
 /// Resolver that hands the same fake source to every symbol.
 pub struct FixedResolver {
-    pub source: FakeSource,
+    pub source: Arc<FakeSource>,
 }
 
 impl FixedResolver {
     pub fn new(source: FakeSource) -> Self {
+        Self {
+            source: Arc::new(source),
+        }
+    }
+
+    /// Share one fake source with the test so it can inspect the calls made.
+    pub fn shared(source: Arc<FakeSource>) -> Self {
         Self { source }
     }
 }
 
 impl SourceResolver for FixedResolver {
     fn source_for(&self, _spec: &SymbolSpec) -> &dyn CandleSource {
-        &self.source
+        self.source.as_ref()
     }
 }
 

@@ -10,7 +10,7 @@ use axum::Router;
 use common::{day_start, test_db, trend_bars, FakeSource, FixedResolver};
 use http_body_util::BodyExt;
 use market_watcher::api::{self, AppState};
-use market_watcher::ingest::{sync_series, Engine};
+use market_watcher::ingest::{now_ms, open_bucket, sync_series, Engine};
 use market_watcher::db;
 use market_watcher::models::{find_symbol, Candle, Timeframe};
 use serde_json::Value;
@@ -18,7 +18,11 @@ use sqlx::SqlitePool;
 use tower::ServiceExt;
 
 fn build_app(pool: SqlitePool, source: FakeSource) -> Router {
-    let resolver = Arc::new(FixedResolver::new(source));
+    build_app_with(pool, Arc::new(source))
+}
+
+fn build_app_with(pool: SqlitePool, source: Arc<FakeSource>) -> Router {
+    let resolver = Arc::new(FixedResolver::shared(source));
     let engine = Arc::new(Engine::new(pool.clone(), resolver));
     api::router(AppState { pool, engine })
 }
@@ -423,4 +427,92 @@ async fn switching_symbols_and_timeframes_never_mixes_series() {
             );
         }
     }
+}
+
+/// A chart loads from the database; when its newest bar is behind, the request
+/// tops the tail up - fetching only what follows the newest stored bar.
+#[tokio::test]
+async fn candles_fetch_only_the_bars_missing_after_the_newest_stored_one() {
+    let db_handle = test_db().await;
+    let bucket = Timeframe::H4.bucket_ms();
+    let current = open_bucket(now_ms(), Timeframe::H4);
+    let start = current - 21 * bucket;
+
+    // Stored history stops two buckets short of now.
+    let stored = trend_bars(20, start, bucket, 10.0, 0.1);
+    db::upsert_candles(&db_handle.pool, "BTCUSDT", Timeframe::H4, &stored)
+        .await
+        .unwrap();
+    assert_eq!(
+        db::count_candles(&db_handle.pool, "BTCUSDT", Timeframe::H4)
+            .await
+            .unwrap(),
+        20
+    );
+
+    // The provider holds the same bars plus the two that have since appeared.
+    let source = Arc::new(FakeSource::new(trend_bars(22, start, bucket, 10.0, 0.1)));
+    let app = build_app_with(db_handle.pool.clone(), Arc::clone(&source));
+
+    let (status, body) = call(&app, "GET", "/api/candles?symbol=BTCUSDT&timeframe=H4&limit=50").await;
+    assert_eq!(status, StatusCode::OK);
+    let points = body["points"].as_array().unwrap();
+    assert_eq!(points.len(), 22, "the two fresh bars were added");
+    // The API speaks seconds, the database stores milliseconds.
+    assert_eq!(points.last().unwrap()["time"].as_i64(), Some(current / 1000));
+
+    // One call, starting at the newest stored bar: nothing older is re-fetched.
+    assert_eq!(source.calls(), 1);
+    assert_eq!(source.last_since(), Some(current - 2 * bucket));
+    assert_eq!(
+        db::count_candles(&db_handle.pool, "BTCUSDT", Timeframe::H4)
+            .await
+            .unwrap(),
+        22
+    );
+
+    // Now the tail is current: another load must not touch the provider.
+    let (status, body) = call(&app, "GET", "/api/candles?symbol=BTCUSDT&timeframe=H4&limit=50").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["points"].as_array().unwrap().len(), 22);
+    assert_eq!(source.calls(), 1, "up-to-date series is not re-fetched");
+}
+
+#[tokio::test]
+async fn candles_are_served_from_storage_when_the_top_up_fails() {
+    let db_handle = test_db().await;
+    let bucket = Timeframe::H4.bucket_ms();
+    let current = open_bucket(now_ms(), Timeframe::H4);
+    let stored = trend_bars(20, current - 21 * bucket, bucket, 10.0, 0.1);
+    db::upsert_candles(&db_handle.pool, "BTCUSDT", Timeframe::H4, &stored)
+        .await
+        .unwrap();
+
+    let source = Arc::new(FakeSource::new(Vec::new()));
+    source.fail_with("provider down");
+    let app = build_app_with(db_handle.pool.clone(), Arc::clone(&source));
+
+    let (status, body) = call(&app, "GET", "/api/candles?symbol=BTCUSDT&timeframe=H4&limit=50").await;
+    assert_eq!(status, StatusCode::OK, "stale data beats no data");
+    assert_eq!(body["points"].as_array().unwrap().len(), 20);
+    assert_eq!(source.calls(), 1);
+}
+
+#[tokio::test]
+async fn candles_fill_an_empty_series_once() {
+    let db_handle = test_db().await;
+    let bucket = Timeframe::H4.bucket_ms();
+    let current = open_bucket(now_ms(), Timeframe::H4);
+    let source = Arc::new(FakeSource::new(trend_bars(30, current - 29 * bucket, bucket, 10.0, 0.1)));
+    let app = build_app_with(db_handle.pool.clone(), Arc::clone(&source));
+
+    let (status, body) = call(&app, "GET", "/api/candles?symbol=BTCUSDT&timeframe=H4&limit=50").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["points"].as_array().unwrap().len(), 30);
+    assert_eq!(source.last_since(), None, "nothing stored, so nothing to skip");
+
+    // The database now holds them, so a second load is served from storage.
+    let (status, _) = call(&app, "GET", "/api/candles?symbol=BTCUSDT&timeframe=H4&limit=50").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(source.calls(), 1);
 }
