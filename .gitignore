@@ -1,0 +1,21 @@
+# Rust
+backend/target/
+backend/.cargo-home/
+**/*.rs.bk
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Local data
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp

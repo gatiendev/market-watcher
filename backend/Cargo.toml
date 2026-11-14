@@ -1,0 +1,40 @@
+[package]
+name = "market-watcher"
+version = "0.1.0"
+edition = "2021"
+description = "Market data watcher: downloads candles, computes EMA50/EMA200, serves a dark trading dashboard"
+license = "MIT"
+
+[dependencies]
+axum = "0.7.9"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+sqlx = { version = "0.8", default-features = false, features = [
+    "runtime-tokio-rustls",
+    "sqlite",
+    "chrono",
+] }
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "rustls-tls",
+    "gzip",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1"
+thiserror = "1"
+async-trait = "0.1"
+futures = "0.3"
+urlencoding = "2"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+tempfile = "3"
+
+[profile.release]
+opt-level = 2
+lto = "thin"

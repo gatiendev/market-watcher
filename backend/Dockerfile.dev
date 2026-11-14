@@ -1,0 +1,13 @@
+# syntax=docker/dockerfile:1
+
+FROM rust:1-bookworm
+RUN cargo install cargo-watch --locked
+WORKDIR /app
+
+ENV DATABASE_PATH=/data/market.db \
+    PORT=8791 \
+    REFRESH_SECS=300 \
+    RUST_LOG=info
+
+EXPOSE 8791
+CMD ["cargo", "watch", "-x", "run", "--why", "--ignore", "data"]

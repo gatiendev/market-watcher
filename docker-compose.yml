@@ -1,0 +1,51 @@
+name: market-watcher
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: market-watcher-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_PATH: /data/market.db
+      PORT: "8791"
+      REFRESH_SECS: "300"
+      RUST_LOG: info
+    volumes:
+      - market-data:/data
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8791/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: market-watcher-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      # Loopback only. Public traffic arrives through nginx-proxy-manager,
+      # which joins the shared proxy network below.
+      - "127.0.0.1:8790:80"
+    networks:
+      - app
+      - proxy
+
+volumes:
+  market-data:
+
+networks:
+  app:
+  # Shared with nginx-proxy-manager so it can reach market-watcher-frontend by name.
+  proxy:
+    external: true
+    name: gatien_app-network

@@ -1,0 +1,53 @@
+name: market-watcher-dev
+
+# Hot-reloading stack for development: cargo-watch backend + Vite dev server.
+#   docker compose -p market-watcher_dev -f docker-compose.dev.yml up -d
+# UI on http://127.0.0.1:5173, API on http://127.0.0.1:8791.
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: market-watcher-dev-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_PATH: /data/market.db
+      PORT: "8791"
+      REFRESH_SECS: "300"
+      RUST_LOG: debug
+    volumes:
+      - ./backend:/app
+      - cargo-registry:/usr/local/cargo/registry
+      - backend-target:/app/target
+      - dev-data:/data
+    ports:
+      - "127.0.0.1:8791:8791"
+    networks:
+      - dev
+
+  frontend:
+    image: node:20-alpine
+    container_name: market-watcher-dev-frontend
+    restart: unless-stopped
+    working_dir: /app
+    command: sh -c "npm install --no-audit --no-fund && npm run dev -- --port 5173 --host 0.0.0.0"
+    environment:
+      VITE_PROXY_TARGET: http://backend:8791
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - dev
+
+volumes:
+  cargo-registry:
+  backend-target:
+  dev-data:
+
+networks:
+  dev:
