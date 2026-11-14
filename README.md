@@ -26,7 +26,8 @@ Yahoo ────┴─► Rust (axum) ──────►│
   daily span, ~2.7 years of 4h bars.
 - **EMAs**: computed over the full stored series (seed = SMA of the first *N* closes, then the
   standard recursion), persisted per bar and returned with every candle. A 200 EMA stays `null`
-  until 200 bars exist. The watchlist shows both the H4 and D1 trend (50 EMA vs 200 EMA) at once.
+  until 200 bars exist. The watchlist shows both the H4 and D1 trend (50 EMA vs 200 EMA) at once,
+  each with how long that trend has been running (`trend_since` = first bar after the last flip).
 
 A background loop refreshes all 8 series every `REFRESH_SECS` (default 300s); the UI also polls the
 API every 60s and has a manual **Refresh** button that hits the providers immediately.
@@ -36,7 +37,7 @@ API every 60s and has a manual **Refresh** button that hits the providers immedi
 | Method | Path | Purpose |
 | ------ | ---- | ------- |
 | GET | `/api/health` | liveness + database check |
-| GET | `/api/markets` | watchlist rows: last price, change %, EMA50/EMA200, trend, freshness, per timeframe |
+| GET | `/api/markets` | watchlist rows: last price, change %, EMA50/EMA200, trend + where it started (`trend_since`, `trend_bars`), freshness, per timeframe |
 | GET | `/api/candles?symbol=SOLUSDT&timeframe=H4&limit=400` | candles + EMAs for the chart |
 | POST | `/api/refresh[?symbol=ES1]` | force a download now |
 
@@ -69,9 +70,9 @@ scripts/test.sh          # Rust suite in Docker + Vitest
 - Rust integration tests cover storage (dedupe, upsert of a forming bar, isolation per
   symbol/timeframe, indicator join), sync behaviour (incremental cursor, H4 backfill down to the
   daily history, no backfill once complete, provider failure keeps old data, recovery) and the
-  HTTP contract (status codes, payload shape, refresh flow) — 63 tests.
+  HTTP contract (status codes, payload shape, refresh flow, trend age) — 67 tests.
 - Frontend tests cover number/time formatting, trend arrows, chart data mapping and the API
-  client's error handling — 28 tests.
+  client's error handling and trend age labels — 30 tests.
 
 ## Layout
 

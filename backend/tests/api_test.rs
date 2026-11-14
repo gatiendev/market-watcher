@@ -107,6 +107,13 @@ async fn markets_exposes_prices_emas_and_trend() {
     assert!(d1["ema50"].as_f64().is_some());
     assert!(d1["ema200"].as_f64().is_some());
     assert_eq!(d1["trend"], "up", "a rising series puts EMA50 above EMA200");
+    // The 200 EMA exists from bar 200 on, so the trend is 61 bars old.
+    assert_eq!(d1["trend_bars"], 61);
+    assert_eq!(
+        d1["trend_since"],
+        day_start() + 199 * Timeframe::D1.bucket_ms(),
+        "the run starts at the first bar with both EMAs"
+    );
     assert!(d1["last_bar_time"].as_i64().unwrap() > 0);
     assert!(d1["last_sync_at"].as_i64().unwrap() > 0);
 

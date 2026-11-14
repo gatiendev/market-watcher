@@ -167,6 +167,45 @@ pub async fn first_bar_time(
     Ok(row.try_get::<Option<i64>, _>("first")?)
 }
 
+/// Where the current EMA trend started, and how many bars it has lasted.
+///
+/// The trend is `ema50 > ema200`; this walks the indicator series and finds the
+/// most recent flip, so the UI can say how long the trend has been in place.
+pub async fn trend_run(
+    pool: &SqlitePool,
+    symbol: &str,
+    timeframe: Timeframe,
+) -> Result<Option<(i64, i64)>> {
+    let row = sqlx::query(
+        r#"
+        WITH series AS (
+            SELECT open_time,
+                   CASE WHEN ema50 > ema200 THEN 1 ELSE 0 END AS up,
+                   LAG(CASE WHEN ema50 > ema200 THEN 1 ELSE 0 END)
+                       OVER (ORDER BY open_time) AS prev_up
+            FROM indicators
+            WHERE symbol = ? AND timeframe = ? AND ema50 IS NOT NULL AND ema200 IS NOT NULL
+        ),
+        start AS (
+            SELECT COALESCE(
+                (SELECT MAX(open_time) FROM series WHERE prev_up IS NOT NULL AND prev_up <> up),
+                (SELECT MIN(open_time) FROM series)
+            ) AS since
+        )
+        SELECT start.since AS since,
+               (SELECT COUNT(*) FROM series WHERE open_time >= start.since) AS bars
+        FROM start
+        WHERE start.since IS NOT NULL
+        "#,
+    )
+    .bind(symbol)
+    .bind(timeframe.as_str())
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row.map(|row| (row.get::<i64, _>("since"), row.get::<i64, _>("bars"))))
+}
+
 pub async fn count_candles(pool: &SqlitePool, symbol: &str, timeframe: Timeframe) -> Result<i64> {
     let row = sqlx::query("SELECT COUNT(*) AS n FROM candles WHERE symbol = ? AND timeframe = ?")
         .bind(symbol)

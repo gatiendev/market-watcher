@@ -35,6 +35,9 @@ pub struct TimeframeSnapshot {
     pub ema200: Option<f64>,
     /// "up" when EMA50 > EMA200, "down" otherwise, `None` before the 200 EMA warms up.
     pub trend: Option<String>,
+    /// Bar where the current trend started, and how many bars it has lasted.
+    pub trend_since: Option<i64>,
+    pub trend_bars: Option<i64>,
     pub bars: i64,
     pub last_bar_time: Option<i64>,
     pub last_sync_at: Option<i64>,
@@ -282,6 +285,7 @@ async fn snapshot_for(
     let prev_close = db::previous_close(pool, spec.symbol, timeframe).await?;
     let bars = db::count_candles(pool, spec.symbol, timeframe).await?;
     let sync = db::get_sync(pool, spec.symbol, timeframe).await?;
+    let trend_run = db::trend_run(pool, spec.symbol, timeframe).await?;
 
     let last_close = latest.as_ref().map(|row| row.candle.close);
     let ema50 = latest.as_ref().and_then(|row| row.ema50);
@@ -302,6 +306,8 @@ async fn snapshot_for(
         ema50,
         ema200,
         trend,
+        trend_since: trend_run.map(|run| run.0),
+        trend_bars: trend_run.map(|run| run.1),
         bars,
         last_bar_time: latest.as_ref().map(|row| row.candle.open_time),
         last_sync_at: sync.as_ref().map(|state| state.last_sync_at),

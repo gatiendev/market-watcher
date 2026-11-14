@@ -40,6 +40,20 @@ export function trendLabel(trend) {
   return 'No signal';
 }
 
+/** Compact age: "45m", "7h", "12d", "6w", "8mo", "3y". */
+export function formatSpan(ms) {
+  if (!isNumber(ms) || ms < 0) return '';
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.round(hours / 24);
+  if (days < 21) return `${days}d`;
+  if (days < 63) return `${Math.round(days / 7)}w`;
+  if (days < 730) return `${Math.round(days / 30)}mo`;
+  return `${Math.round(days / 365)}y`;
+}
+
 /** Chart arrow for the EMA 50 vs EMA 200 relationship. */
 export function trendGlyph(trend) {
   if (trend === 'up') return '▲';

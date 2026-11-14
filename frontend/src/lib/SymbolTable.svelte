@@ -1,5 +1,13 @@
 <script>
-  import { changeClass, formatPct, formatPrice, trendGlyph, trendLabel } from './format.js';
+  import {
+    changeClass,
+    formatBarTime,
+    formatPct,
+    formatPrice,
+    formatSpan,
+    trendGlyph,
+    trendLabel,
+  } from './format.js';
 
   let { rows = [], selected = '', timeframe = 'H4', onselect = () => {} } = $props();
 
@@ -13,11 +21,21 @@
     return row?.timeframes?.[tf] ?? null;
   }
 
+  /** How long the trend has been running, e.g. "3w". */
+  function trendAge(row, tf) {
+    const s = tfSnap(row, tf);
+    if (!s?.trend_since) return '';
+    return formatSpan(Date.now() - s.trend_since);
+  }
+
   function trendTitle(row, tf) {
     const s = tfSnap(row, tf);
     if (!s?.trend) return `${tf}: waiting for 200 bars`;
     const relation = s.trend === 'up' ? 'above' : 'below';
-    return `${tf} ${trendLabel(s.trend)}: EMA 50 ${formatPrice(s.ema50, row.decimals)} ${relation} EMA 200 ${formatPrice(s.ema200, row.decimals)}`;
+    const age = trendAge(row, tf);
+    const span = s.trend_bars === 1 ? '1 bar' : `${s.trend_bars} bars`;
+    const since = s.trend_since ? ` since ${formatBarTime(s.trend_since)}, ${span}` : '';
+    return `${tf} ${trendLabel(s.trend)}${age ? ` for ${age}` : ''}${since}: EMA 50 ${formatPrice(s.ema50, row.decimals)} ${relation} EMA 200 ${formatPrice(s.ema200, row.decimals)}`;
   }
 
   function pick(symbol) {
@@ -77,7 +95,9 @@
                   class="trend-line {tfSnap(row, tf)?.trend ?? 'flat'}"
                   title={trendTitle(row, tf)}
                 >
-                  <span class="tf">{tf}</span>{trendGlyph(tfSnap(row, tf)?.trend)}
+                  <span class="tf">{tf}</span>
+                  <span class="glyph">{trendGlyph(tfSnap(row, tf)?.trend)}</span>
+                  <span class="age">{trendAge(row, tf)}</span>
                 </span>
               {/each}
             </td>

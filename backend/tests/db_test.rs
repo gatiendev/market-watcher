@@ -307,3 +307,57 @@ async fn limit_is_clamped_and_returns_the_newest_bars() {
         .unwrap();
     assert_eq!(clamped.len(), 1);
 }
+
+#[tokio::test]
+async fn trend_run_reports_the_last_flip_and_its_length() {
+    let db_handle = test_db().await;
+    let step = Timeframe::D1.bucket_ms();
+    let start = day_start();
+
+    // 10 bearish bars, then 6 bullish ones: the flip is on bar 10.
+    let values: Vec<(i64, Option<f64>, Option<f64>)> = (0..16)
+        .map(|idx| {
+            let open_time = start + idx * step;
+            if idx < 10 {
+                (open_time, Some(9.0), Some(10.0))
+            } else {
+                (open_time, Some(11.0), Some(10.0))
+            }
+        })
+        .collect();
+    db::replace_indicators(&db_handle.pool, "SOLUSDT", Timeframe::D1, &values)
+        .await
+        .unwrap();
+
+    let run = db::trend_run(&db_handle.pool, "SOLUSDT", Timeframe::D1)
+        .await
+        .unwrap();
+    assert_eq!(run, Some((start + 10 * step, 6)));
+}
+
+#[tokio::test]
+async fn trend_run_is_empty_without_indicators() {
+    let db_handle = test_db().await;
+    let run = db::trend_run(&db_handle.pool, "BTCUSDT", Timeframe::H4)
+        .await
+        .unwrap();
+    assert_eq!(run, None);
+}
+
+#[tokio::test]
+async fn trend_run_covers_a_series_that_never_flipped() {
+    let db_handle = test_db().await;
+    let step = Timeframe::H4.bucket_ms();
+    let start = day_start();
+    let values: Vec<(i64, Option<f64>, Option<f64>)> = (0..5)
+        .map(|idx| (start + idx * step, Some(11.0), Some(10.0)))
+        .collect();
+    db::replace_indicators(&db_handle.pool, "ES1", Timeframe::H4, &values)
+        .await
+        .unwrap();
+
+    let run = db::trend_run(&db_handle.pool, "ES1", Timeframe::H4)
+        .await
+        .unwrap();
+    assert_eq!(run, Some((start, 5)), "the trend is as old as the series");
+}

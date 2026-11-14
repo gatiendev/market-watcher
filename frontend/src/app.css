@@ -87,7 +87,7 @@ button {
 
 .app {
   display: grid;
-  grid-template-columns: 472px minmax(0, 1fr);
+  grid-template-columns: 484px minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100dvh;
   gap: 14px;
@@ -426,6 +426,22 @@ table.watch thead th.trend-head {
   opacity: 0.85;
 }
 
+.trend-line .glyph {
+  width: 7px;
+  text-align: center;
+  line-height: 1;
+}
+
+/* How long the trend has been running. */
+.trend-line .age {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 18px;
+  text-align: right;
+}
+
 .trend-line.up {
   color: var(--up);
 }
@@ -641,7 +657,7 @@ table.watch thead th.trend-head {
 
 @media (max-width: 1180px) {
   .app {
-    grid-template-columns: 412px minmax(0, 1fr);
+    grid-template-columns: 424px minmax(0, 1fr);
   }
 }
 
@@ -732,6 +748,16 @@ table.watch thead th.trend-head {
 
   .trend-line .tf {
     font-size: 8px;
+  }
+
+  .trend-line .age {
+    font-size: 8px;
+    min-width: 13px;
+  }
+
+  .trend-cell,
+  table.watch thead th.trend-head {
+    padding-right: 2px;
   }
 
   table.watch td:first-child,

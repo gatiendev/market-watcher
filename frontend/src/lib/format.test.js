@@ -6,6 +6,7 @@ import {
   formatPct,
   formatPrice,
   formatRelative,
+  formatSpan,
   formatVolume,
   isNumber,
   sortSymbols,
@@ -140,6 +141,27 @@ describe('chart data mapping', () => {
     expect(emaSpread(90, 100)).toBeCloseTo(-10, 6);
     expect(emaSpread(null, 100)).toBeNull();
     expect(emaSpread(100, 0)).toBeNull();
+  });
+});
+
+describe('formatSpan', () => {
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  it('uses the largest sensible unit', () => {
+    expect(formatSpan(45 * minute)).toBe('45m');
+    expect(formatSpan(8 * hour)).toBe('8h');
+    expect(formatSpan(12 * day)).toBe('12d');
+    expect(formatSpan(40 * day)).toBe('6w');
+    expect(formatSpan(200 * day)).toBe('7mo');
+    expect(formatSpan(900 * day)).toBe('2y');
+  });
+
+  it('returns nothing for a missing or negative span', () => {
+    expect(formatSpan(null)).toBe('');
+    expect(formatSpan(undefined)).toBe('');
+    expect(formatSpan(-5)).toBe('');
   });
 });
 
