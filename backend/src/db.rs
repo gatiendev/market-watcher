@@ -151,11 +151,23 @@ pub async fn last_bar_time(
     Ok(row.try_get::<Option<i64>, _>("last")?)
 }
 
-pub async fn count_candles(
+/// Oldest stored bar, used to walk history backwards until the series is complete.
+pub async fn first_bar_time(
     pool: &SqlitePool,
     symbol: &str,
     timeframe: Timeframe,
-) -> Result<i64> {
+) -> Result<Option<i64>> {
+    let row = sqlx::query(
+        "SELECT MIN(open_time) AS first FROM candles WHERE symbol = ? AND timeframe = ?",
+    )
+    .bind(symbol)
+    .bind(timeframe.as_str())
+    .fetch_one(pool)
+    .await?;
+    Ok(row.try_get::<Option<i64>, _>("first")?)
+}
+
+pub async fn count_candles(pool: &SqlitePool, symbol: &str, timeframe: Timeframe) -> Result<i64> {
     let row = sqlx::query("SELECT COUNT(*) AS n FROM candles WHERE symbol = ? AND timeframe = ?")
         .bind(symbol)
         .bind(timeframe.as_str())

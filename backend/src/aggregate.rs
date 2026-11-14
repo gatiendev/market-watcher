@@ -78,7 +78,10 @@ mod tests {
         assert_eq!(bucket_start(4 * HOUR, four_h), 4 * HOUR);
         assert_eq!(bucket_start(7 * HOUR + 1, four_h), 4 * HOUR);
         // 2026-01-01T00:00:00Z is a day boundary too
-        assert_eq!(bucket_start(1_767_225_600_000, Timeframe::D1.bucket_ms()), 1_767_225_600_000);
+        assert_eq!(
+            bucket_start(1_767_225_600_000, Timeframe::D1.bucket_ms()),
+            1_767_225_600_000
+        );
     }
 
     #[test]

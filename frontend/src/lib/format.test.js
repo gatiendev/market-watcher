@@ -12,6 +12,7 @@ import {
   toCandles,
   toLine,
   toVolume,
+  trendGlyph,
   trendLabel,
 } from './format.js';
 
@@ -139,6 +140,22 @@ describe('chart data mapping', () => {
     expect(emaSpread(90, 100)).toBeCloseTo(-10, 6);
     expect(emaSpread(null, 100)).toBeNull();
     expect(emaSpread(100, 0)).toBeNull();
+  });
+});
+
+describe('trendGlyph', () => {
+  it('points up when the 50 EMA leads', () => {
+    expect(trendGlyph('up')).toBe('▲');
+  });
+
+  it('points down when the 200 EMA leads', () => {
+    expect(trendGlyph('down')).toBe('▼');
+  });
+
+  it('shows a neutral dot when the 200 EMA is not warm yet', () => {
+    expect(trendGlyph(null)).toBe('·');
+    expect(trendGlyph(undefined)).toBe('·');
+    expect(trendGlyph('flat')).toBe('·');
   });
 });
 

@@ -263,7 +263,11 @@ async fn refresh(
 
     let failed = reports.iter().filter(|r| r.status != "ok").count();
     if failed > 0 {
-        tracing::warn!(failed, total = reports.len(), "refresh finished with errors");
+        tracing::warn!(
+            failed,
+            total = reports.len(),
+            "refresh finished with errors"
+        );
     }
     Ok(Json(RefreshResponse { reports }))
 }

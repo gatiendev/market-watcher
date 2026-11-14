@@ -17,13 +17,18 @@ use crate::models::{Candle, Source, SymbolSpec, Timeframe};
 /// Anything that can hand back candles for a symbol.
 #[async_trait]
 pub trait CandleSource: Send + Sync {
-    /// `since` is the bucket start (epoch ms) to resume from; `None` means
-    /// "give me as much history as you reasonably can".
+    /// Fetch candles in `[since, until)`.
+    ///
+    /// * `since = None, until = None` — the newest page of history.
+    /// * `since = Some(ts)` — everything from that bucket onwards (live refresh).
+    /// * `until = Some(ts)` — one page of bars older than `ts`, walking backwards
+    ///   through history (backfill).
     async fn fetch(
         &self,
         spec: &SymbolSpec,
         timeframe: Timeframe,
         since: Option<i64>,
+        until: Option<i64>,
     ) -> Result<Vec<Candle>>;
 }
 
@@ -111,6 +116,9 @@ pub fn align_to_bucket(ts_ms: i64, bucket_ms: i64) -> i64 {
         ts_ms - ts_ms.rem_euclid(bucket_ms)
     }
 }
+
+/// Milliseconds in one day; shared by the providers and the backfill floor.
+pub const DAY_MS: i64 = 86_400_000;
 
 /// Milliseconds -> ISO-8601 for log lines.
 pub fn iso(ts_ms: i64) -> String {

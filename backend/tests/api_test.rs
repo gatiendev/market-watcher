@@ -62,7 +62,10 @@ async fn markets_lists_all_four_symbols_on_both_timeframes() {
 
     let symbols = body["symbols"].as_array().unwrap();
     assert_eq!(symbols.len(), 4);
-    let names: Vec<&str> = symbols.iter().map(|row| row["symbol"].as_str().unwrap()).collect();
+    let names: Vec<&str> = symbols
+        .iter()
+        .map(|row| row["symbol"].as_str().unwrap())
+        .collect();
     assert_eq!(names, vec!["SOLUSDT", "BTCUSDT", "EURUSD", "ES1"]);
 
     for row in symbols {
@@ -82,7 +85,13 @@ async fn markets_lists_all_four_symbols_on_both_timeframes() {
 #[tokio::test]
 async fn markets_exposes_prices_emas_and_trend() {
     let db_handle = test_db().await;
-    let source = FakeSource::new(trend_bars(260, day_start(), Timeframe::D1.bucket_ms(), 100.0, 1.0));
+    let source = FakeSource::new(trend_bars(
+        260,
+        day_start(),
+        Timeframe::D1.bucket_ms(),
+        100.0,
+        1.0,
+    ));
     let spec = find_symbol("SOLUSDT").unwrap();
     sync_series(&db_handle.pool, &source, spec, Timeframe::D1).await;
 
@@ -108,12 +117,23 @@ async fn markets_exposes_prices_emas_and_trend() {
 #[tokio::test]
 async fn candles_returns_an_ascending_series_with_emas() {
     let db_handle = test_db().await;
-    let source = FakeSource::new(trend_bars(260, day_start(), Timeframe::H4.bucket_ms(), 10.0, 0.1));
+    let source = FakeSource::new(trend_bars(
+        260,
+        day_start(),
+        Timeframe::H4.bucket_ms(),
+        10.0,
+        0.1,
+    ));
     let spec = find_symbol("BTCUSDT").unwrap();
     sync_series(&db_handle.pool, &source, spec, Timeframe::H4).await;
 
     let app = build_app(db_handle.pool.clone(), FakeSource::new(Vec::new()));
-    let (status, body) = call(&app, "GET", "/api/candles?symbol=BTCUSDT&timeframe=H4&limit=50").await;
+    let (status, body) = call(
+        &app,
+        "GET",
+        "/api/candles?symbol=BTCUSDT&timeframe=H4&limit=50",
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["symbol"], "BTCUSDT");
     assert_eq!(body["timeframe"], "H4");
@@ -131,15 +151,30 @@ async fn candles_returns_an_ascending_series_with_emas() {
 #[tokio::test]
 async fn candles_accepts_lowercase_timeframe_and_caps_the_limit() {
     let db_handle = test_db().await;
-    let source = FakeSource::new(trend_bars(20, day_start(), Timeframe::D1.bucket_ms(), 5.0, 0.1));
+    let source = FakeSource::new(trend_bars(
+        20,
+        day_start(),
+        Timeframe::D1.bucket_ms(),
+        5.0,
+        0.1,
+    ));
     let spec = find_symbol("ES1").unwrap();
     sync_series(&db_handle.pool, &source, spec, Timeframe::D1).await;
 
     let app = build_app(db_handle.pool.clone(), FakeSource::new(Vec::new()));
-    let (status, body) = call(&app, "GET", "/api/candles?symbol=es1&timeframe=1d&limit=9999").await;
+    let (status, body) = call(
+        &app,
+        "GET",
+        "/api/candles?symbol=es1&timeframe=1d&limit=9999",
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["symbol"], "ES1");
-    assert_eq!(body["points"].as_array().unwrap().len(), 20, "never more than stored");
+    assert_eq!(
+        body["points"].as_array().unwrap().len(),
+        20,
+        "never more than stored"
+    );
 }
 
 #[tokio::test]
@@ -162,7 +197,13 @@ async fn candles_rejects_unknown_symbols_and_timeframes() {
 #[tokio::test]
 async fn refresh_downloads_every_series_then_serves_it() {
     let db_handle = test_db().await;
-    let source = FakeSource::new(trend_bars(220, day_start(), Timeframe::H4.bucket_ms(), 30.0, 0.05));
+    let source = FakeSource::new(trend_bars(
+        220,
+        day_start(),
+        Timeframe::H4.bucket_ms(),
+        30.0,
+        0.05,
+    ));
     let app = build_app(db_handle.pool.clone(), source);
 
     let (status, body) = call(&app, "POST", "/api/refresh").await;
@@ -181,7 +222,13 @@ async fn refresh_downloads_every_series_then_serves_it() {
 #[tokio::test]
 async fn refresh_can_target_one_symbol() {
     let db_handle = test_db().await;
-    let source = FakeSource::new(trend_bars(210, day_start(), Timeframe::D1.bucket_ms(), 1.0, 0.001));
+    let source = FakeSource::new(trend_bars(
+        210,
+        day_start(),
+        Timeframe::D1.bucket_ms(),
+        1.0,
+        0.001,
+    ));
     let app = build_app(db_handle.pool.clone(), source);
 
     let (status, body) = call(&app, "POST", "/api/refresh?symbol=eurusd").await;
@@ -192,7 +239,10 @@ async fn refresh_can_target_one_symbol() {
 
     let (_, markets) = call(&app, "GET", "/api/markets").await;
     assert_eq!(markets["symbols"][2]["timeframes"]["D1"]["bars"], 210);
-    assert_eq!(markets["symbols"][0]["timeframes"]["D1"]["bars"], 0, "others untouched");
+    assert_eq!(
+        markets["symbols"][0]["timeframes"]["D1"]["bars"], 0,
+        "others untouched"
+    );
 }
 
 #[tokio::test]
@@ -206,7 +256,10 @@ async fn refresh_reports_provider_failures_without_crashing() {
     assert_eq!(status, StatusCode::OK, "the endpoint still answers");
     let reports = body["reports"].as_array().unwrap();
     assert!(reports.iter().all(|report| report["status"] == "error"));
-    assert!(reports[0]["message"].as_str().unwrap().contains("upstream unavailable"));
+    assert!(reports[0]["message"]
+        .as_str()
+        .unwrap()
+        .contains("upstream unavailable"));
 }
 
 #[tokio::test]

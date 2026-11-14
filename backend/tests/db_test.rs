@@ -15,7 +15,10 @@ async fn schema_is_created_and_reopenable() {
             .await
             .unwrap();
     for expected in ["candles", "indicators", "sync_state"] {
-        assert!(tables.contains(&expected.to_string()), "missing table {expected}");
+        assert!(
+            tables.contains(&expected.to_string()),
+            "missing table {expected}"
+        );
     }
 
     // Re-running the migration must not fail.
@@ -35,8 +38,16 @@ async fn candles_round_trip_in_chart_order() {
     let loaded = db::load_candles(&db_handle.pool, "SOLUSDT", Timeframe::D1, 100)
         .await
         .unwrap();
-    assert_eq!(loaded, bars, "stored bars must come back identical and ascending");
-    assert_eq!(db::count_candles(&db_handle.pool, "SOLUSDT", Timeframe::D1).await.unwrap(), 5);
+    assert_eq!(
+        loaded, bars,
+        "stored bars must come back identical and ascending"
+    );
+    assert_eq!(
+        db::count_candles(&db_handle.pool, "SOLUSDT", Timeframe::D1)
+            .await
+            .unwrap(),
+        5
+    );
 }
 
 #[tokio::test]
@@ -55,7 +66,9 @@ async fn reupserting_a_bar_updates_it_instead_of_duplicating() {
         .await
         .unwrap();
 
-    let count = db::count_candles(&db_handle.pool, "BTCUSDT", Timeframe::D1).await.unwrap();
+    let count = db::count_candles(&db_handle.pool, "BTCUSDT", Timeframe::D1)
+        .await
+        .unwrap();
     assert_eq!(count, 3, "no duplicate rows");
 
     let loaded = db::load_candles(&db_handle.pool, "BTCUSDT", Timeframe::D1, 10)
@@ -69,7 +82,9 @@ async fn reupserting_a_bar_updates_it_instead_of_duplicating() {
 async fn last_bar_time_is_the_incremental_cursor() {
     let db_handle = test_db().await;
     assert_eq!(
-        db::last_bar_time(&db_handle.pool, "EURUSD", Timeframe::H4).await.unwrap(),
+        db::last_bar_time(&db_handle.pool, "EURUSD", Timeframe::H4)
+            .await
+            .unwrap(),
         None
     );
 
@@ -79,7 +94,9 @@ async fn last_bar_time_is_the_incremental_cursor() {
         .await
         .unwrap();
     assert_eq!(
-        db::last_bar_time(&db_handle.pool, "EURUSD", Timeframe::H4).await.unwrap(),
+        db::last_bar_time(&db_handle.pool, "EURUSD", Timeframe::H4)
+            .await
+            .unwrap(),
         Some(start + 3 * MINUTE_MS)
     );
 }
@@ -105,9 +122,24 @@ async fn timeframes_and_symbols_are_isolated() {
     .await
     .unwrap();
 
-    assert_eq!(db::count_candles(&db_handle.pool, "SOLUSDT", Timeframe::D1).await.unwrap(), 2);
-    assert_eq!(db::count_candles(&db_handle.pool, "SOLUSDT", Timeframe::H4).await.unwrap(), 6);
-    assert_eq!(db::count_candles(&db_handle.pool, "BTCUSDT", Timeframe::D1).await.unwrap(), 0);
+    assert_eq!(
+        db::count_candles(&db_handle.pool, "SOLUSDT", Timeframe::D1)
+            .await
+            .unwrap(),
+        2
+    );
+    assert_eq!(
+        db::count_candles(&db_handle.pool, "SOLUSDT", Timeframe::H4)
+            .await
+            .unwrap(),
+        6
+    );
+    assert_eq!(
+        db::count_candles(&db_handle.pool, "BTCUSDT", Timeframe::D1)
+            .await
+            .unwrap(),
+        0
+    );
 }
 
 #[tokio::test]
@@ -122,7 +154,12 @@ async fn invalid_bars_are_never_stored() {
         .await
         .unwrap();
     assert_eq!(written, 1);
-    assert_eq!(db::count_candles(&db_handle.pool, "ES1", Timeframe::D1).await.unwrap(), 1);
+    assert_eq!(
+        db::count_candles(&db_handle.pool, "ES1", Timeframe::D1)
+            .await
+            .unwrap(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -164,9 +201,14 @@ async fn indicators_join_onto_candles() {
     assert_eq!(latest.ema50, Some(103.0));
 
     // Replacing indicators must not leave stale rows behind.
-    db::replace_indicators(&db_handle.pool, "SOLUSDT", Timeframe::D1, &[(start, Some(1.0), None)])
-        .await
-        .unwrap();
+    db::replace_indicators(
+        &db_handle.pool,
+        "SOLUSDT",
+        Timeframe::D1,
+        &[(start, Some(1.0), None)],
+    )
+    .await
+    .unwrap();
     let series = db::load_series(&db_handle.pool, "SOLUSDT", Timeframe::D1, 10)
         .await
         .unwrap();
@@ -185,16 +227,26 @@ async fn previous_close_returns_the_bar_before_the_last() {
         .await
         .unwrap();
     assert_eq!(
-        db::previous_close(&db_handle.pool, "ES1", Timeframe::D1).await.unwrap(),
+        db::previous_close(&db_handle.pool, "ES1", Timeframe::D1)
+            .await
+            .unwrap(),
         Some(10.0)
     );
-    assert_eq!(db::previous_close(&db_handle.pool, "NOPE", Timeframe::D1).await.unwrap(), None);
+    assert_eq!(
+        db::previous_close(&db_handle.pool, "NOPE", Timeframe::D1)
+            .await
+            .unwrap(),
+        None
+    );
 }
 
 #[tokio::test]
 async fn sync_state_round_trips() {
     let db_handle = test_db().await;
-    assert!(db::get_sync(&db_handle.pool, "SOLUSDT", Timeframe::H4).await.unwrap().is_none());
+    assert!(db::get_sync(&db_handle.pool, "SOLUSDT", Timeframe::H4)
+        .await
+        .unwrap()
+        .is_none());
 
     db::upsert_candles(
         &db_handle.pool,
@@ -216,9 +268,16 @@ async fn sync_state_round_trips() {
     assert_eq!(state.bars, 3);
     assert!(state.last_bar.is_some());
 
-    db::record_sync(&db_handle.pool, "SOLUSDT", Timeframe::H4, 3, "error", Some("boom"))
-        .await
-        .unwrap();
+    db::record_sync(
+        &db_handle.pool,
+        "SOLUSDT",
+        Timeframe::H4,
+        3,
+        "error",
+        Some("boom"),
+    )
+    .await
+    .unwrap();
     let state = db::get_sync(&db_handle.pool, "SOLUSDT", Timeframe::H4)
         .await
         .unwrap()

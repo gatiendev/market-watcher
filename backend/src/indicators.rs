@@ -100,7 +100,10 @@ mod tests {
         closes.extend(std::iter::repeat(200.0).take(20));
         let fast = ema_last(&closes, EMA_FAST).unwrap();
         let slow = ema_last(&closes, EMA_SLOW).unwrap();
-        assert!(fast > slow, "fast {fast} should be above slow {slow} after a jump");
+        assert!(
+            fast > slow,
+            "fast {fast} should be above slow {slow} after a jump"
+        );
     }
 
     #[test]

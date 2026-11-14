@@ -40,6 +40,13 @@ export function trendLabel(trend) {
   return 'No signal';
 }
 
+/** Chart arrow for the EMA 50 vs EMA 200 relationship. */
+export function trendGlyph(trend) {
+  if (trend === 'up') return '▲';
+  if (trend === 'down') return '▼';
+  return '·';
+}
+
 /** CSS class for a signed value. */
 export function changeClass(value) {
   if (!isNumber(value) || value === 0) return 'flat';

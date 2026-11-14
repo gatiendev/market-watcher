@@ -87,7 +87,7 @@ button {
 
 .app {
   display: grid;
-  grid-template-columns: 442px minmax(0, 1fr);
+  grid-template-columns: 472px minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100dvh;
   gap: 14px;
@@ -399,6 +399,45 @@ table.watch td:first-child {
   color: #cbb49b;
 }
 
+/* EMA trend per timeframe, both always visible whatever the chart shows. */
+table.watch thead th.trend-head {
+  text-align: right;
+  padding-right: 8px;
+}
+
+.trend-cell {
+  padding-right: 8px;
+  line-height: 1.15;
+}
+
+.trend-line {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  font-size: 9.5px;
+  color: var(--muted-2);
+}
+
+.trend-line .tf {
+  font-size: 8.5px;
+  letter-spacing: 0.04em;
+  color: var(--muted-2);
+  opacity: 0.85;
+}
+
+.trend-line.up {
+  color: var(--up);
+}
+
+.trend-line.down {
+  color: var(--down);
+}
+
+.trend-line.flat {
+  color: var(--muted-2);
+}
+
 .row-note {
   font-size: 10px;
   color: var(--muted-2);
@@ -602,7 +641,7 @@ table.watch td:first-child {
 
 @media (max-width: 1180px) {
   .app {
-    grid-template-columns: 388px minmax(0, 1fr);
+    grid-template-columns: 412px minmax(0, 1fr);
   }
 }
 
@@ -677,8 +716,22 @@ table.watch td:first-child {
 
   table.watch td,
   table.watch thead th {
-    padding-left: 3px;
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+
+  .trend-cell,
+  table.watch thead th.trend-head {
     padding-right: 3px;
+  }
+
+  .trend-line {
+    font-size: 9px;
+    gap: 2px;
+  }
+
+  .trend-line .tf {
+    font-size: 8px;
   }
 
   table.watch td:first-child,
@@ -700,9 +753,13 @@ table.watch td:first-child {
   }
 
   .chg {
-    min-width: 44px;
-    padding: 1px 4px;
+    min-width: 40px;
+    padding: 1px 3px;
     font-size: 10px;
+  }
+
+  .ema-cell {
+    font-size: 10.5px;
   }
 
   .chart-wrap {

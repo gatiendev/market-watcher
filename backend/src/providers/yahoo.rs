@@ -6,12 +6,13 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde_json::Value;
 
-use super::{align_to_bucket, get_json, CandleSource};
+use super::{align_to_bucket, get_json, CandleSource, DAY_MS};
 use crate::aggregate::resample;
 use crate::models::{Candle, SymbolSpec, Timeframe};
 
 const DEFAULT_BASE: &str = "https://query1.finance.yahoo.com/v8/finance/chart";
-const DAY_MS: i64 = 86_400_000;
+/// Bars requested per page; also the width of one backfill window.
+const PAGE_BARS: i64 = 1000;
 
 pub struct YahooSource {
     client: reqwest::Client,
@@ -60,18 +61,30 @@ impl CandleSource for YahooSource {
         spec: &SymbolSpec,
         timeframe: Timeframe,
         since: Option<i64>,
+        until: Option<i64>,
     ) -> Result<Vec<Candle>> {
         let bucket = timeframe.bucket_ms();
         let interval = Self::interval(timeframe);
         let now = chrono::Utc::now().timestamp_millis();
 
-        // Resume one bar early so the newest (still forming) bar is refetched.
-        let start_ms = match since {
-            Some(ts) => align_to_bucket(ts, bucket) - bucket,
-            None => now - timeframe.initial_history_days() * DAY_MS,
+        // `until` walks backwards through history: ask for the page just before it.
+        let (start_ms, end_ms) = match until {
+            Some(end) => {
+                let end = align_to_bucket(end, bucket);
+                (align_to_bucket(end - PAGE_BARS * bucket, bucket), end)
+            }
+            None => {
+                // Resume one bar early so the newest (still forming) bar is refetched.
+                let start = match since {
+                    Some(ts) => align_to_bucket(ts, bucket) - bucket,
+                    None => now - timeframe.initial_history_days() * DAY_MS,
+                };
+                (start, now + 3_600_000)
+            }
         };
+
         let period1 = start_ms.max(0) / 1000;
-        let period2 = now / 1000 + 3600;
+        let period2 = end_ms / 1000;
 
         let url = self.url(spec.provider_symbol, interval, period1, period2);
         let json = get_json(&self.client, &url, 3)
@@ -92,10 +105,9 @@ impl CandleSource for YahooSource {
                 .collect(),
         };
 
-        // Drop anything older than the cursor: those bars are already stored.
-        if let Some(ts) = since {
-            candles.retain(|candle| candle.open_time > align_to_bucket(ts, bucket) - bucket);
-        }
+        // Keep only the requested window: older bars are already stored, later ones
+        // belong to the next page.
+        candles.retain(|candle| candle.open_time >= start_ms && candle.open_time < end_ms);
         candles.sort_by_key(|candle| candle.open_time);
         candles.dedup_by_key(|candle| candle.open_time);
         Ok(candles)
@@ -154,12 +166,9 @@ fn parse_chart(json: &Value) -> Result<Vec<Candle>> {
             None => continue,
         };
         let pick = |values: &Vec<Option<f64>>| values.get(idx).copied().flatten();
-        let (Some(open), Some(high), Some(low), Some(close)) = (
-            pick(&opens),
-            pick(&highs),
-            pick(&lows),
-            pick(&closes),
-        ) else {
+        let (Some(open), Some(high), Some(low), Some(close)) =
+            (pick(&opens), pick(&highs), pick(&lows), pick(&closes))
+        else {
             // Market was closed for this slot; Yahoo pads with nulls.
             continue;
         };

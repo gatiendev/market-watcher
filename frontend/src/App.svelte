@@ -15,6 +15,8 @@
   } from './lib/format.js';
 
   const POLL_MS = 60_000;
+  // Enough history to zoom out over months, not just the last few weeks.
+  const CHART_BARS = 2000;
   const TIMEFRAMES = ['H4', 'D1'];
 
   let markets = $state([]);
@@ -53,7 +55,7 @@
     if (!silent) chartBusy = true;
 
     try {
-      const payload = await fetchCandles(symbol, tf, 420, controller.signal);
+      const payload = await fetchCandles(symbol, tf, CHART_BARS, controller.signal);
       if (controller.signal.aborted) return;
       points = payload.points ?? [];
       lastLoaded = Date.now();

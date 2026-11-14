@@ -39,7 +39,7 @@ impl BinanceSource {
         }
     }
 
-    fn url(&self, symbol: &str, interval: &str, start: Option<i64>) -> String {
+    fn url(&self, symbol: &str, interval: &str, start: Option<i64>, end: Option<i64>) -> String {
         let mut url = format!(
             "{}/api/v3/klines?symbol={}&interval={}&limit={}",
             self.base, symbol, interval, PAGE_LIMIT
@@ -47,7 +47,29 @@ impl BinanceSource {
         if let Some(start) = start {
             url.push_str(&format!("&startTime={start}"));
         }
+        if let Some(end) = end {
+            url.push_str(&format!("&endTime={end}"));
+        }
         url
+    }
+
+    /// One page of bars that ends just before `until` (history backfill).
+    async fn fetch_page_before(
+        &self,
+        spec: &SymbolSpec,
+        interval: &str,
+        bucket: i64,
+        until: i64,
+    ) -> Result<Vec<Candle>> {
+        let start = (until - PAGE_LIMIT as i64 * bucket).max(0);
+        let url = self.url(spec.provider_symbol, interval, Some(start), Some(until));
+        let json = get_json(&self.client, &url, 3)
+            .await
+            .map_err(|err| anyhow!("binance {} {}: {err}", spec.symbol, interval))?;
+
+        let mut page = parse_klines(&json)?;
+        page.retain(|candle| candle.open_time >= start && candle.open_time < until);
+        Ok(page)
     }
 }
 
@@ -58,14 +80,23 @@ impl CandleSource for BinanceSource {
         spec: &SymbolSpec,
         timeframe: Timeframe,
         since: Option<i64>,
+        until: Option<i64>,
     ) -> Result<Vec<Candle>> {
         let interval = Self::interval(timeframe);
         let bucket = timeframe.bucket_ms();
+
+        // Walking backwards through history: one page per call keeps refreshes short.
+        if let Some(until) = until {
+            return self
+                .fetch_page_before(spec, interval, bucket, align_to_bucket(until, bucket))
+                .await;
+        }
+
         let mut cursor = since.map(|ts| align_to_bucket(ts, bucket));
         let mut out: Vec<Candle> = Vec::new();
 
         for _ in 0..MAX_PAGES {
-            let url = self.url(spec.provider_symbol, interval, cursor);
+            let url = self.url(spec.provider_symbol, interval, cursor, None);
             let json = get_json(&self.client, &url, 3)
                 .await
                 .map_err(|err| anyhow!("binance {} {}: {err}", spec.symbol, interval))?;
@@ -148,8 +179,34 @@ mod tests {
     #[test]
     fn parses_the_documented_kline_shape() {
         let payload = serde_json::json!([
-            [1700000000000i64, "100.0", "110.0", "90.0", "105.0", "1234.5", 1700014399999i64, "0", 10, "0", "0", "0"],
-            [1700014400000i64, "105.0", "112.0", "101.0", "109.0", "222.0", 1700028799999i64, "0", 10, "0", "0", "0"]
+            [
+                1700000000000i64,
+                "100.0",
+                "110.0",
+                "90.0",
+                "105.0",
+                "1234.5",
+                1700014399999i64,
+                "0",
+                10,
+                "0",
+                "0",
+                "0"
+            ],
+            [
+                1700014400000i64,
+                "105.0",
+                "112.0",
+                "101.0",
+                "109.0",
+                "222.0",
+                1700028799999i64,
+                "0",
+                10,
+                "0",
+                "0",
+                "0"
+            ]
         ]);
         let candles = parse_klines(&payload).unwrap();
         assert_eq!(candles.len(), 2);
@@ -162,9 +219,9 @@ mod tests {
     #[test]
     fn skips_broken_rows_and_keeps_the_good_ones() {
         let payload = serde_json::json!([
-            [1i64, "100.0", "90.0", "110.0", "105.0", "1.0"],   // high < low -> invalid
-            [2i64, "abc", "110.0", "90.0", "105.0", "1.0"],     // unparsable open
-            [3i64, "100.0", "110.0", "90.0", "105.0", "1.0"]    // fine
+            [1i64, "100.0", "90.0", "110.0", "105.0", "1.0"], // high < low -> invalid
+            [2i64, "abc", "110.0", "90.0", "105.0", "1.0"],   // unparsable open
+            [3i64, "100.0", "110.0", "90.0", "105.0", "1.0"]  // fine
         ]);
         let candles = parse_klines(&payload).unwrap();
         assert_eq!(candles.len(), 1);
@@ -173,7 +230,9 @@ mod tests {
 
     #[test]
     fn rejects_a_non_array_payload() {
-        assert!(parse_klines(&serde_json::json!({"code": -1121, "msg": "Invalid symbol"})).is_err());
+        assert!(
+            parse_klines(&serde_json::json!({"code": -1121, "msg": "Invalid symbol"})).is_err()
+        );
     }
 
     #[test]
@@ -185,10 +244,27 @@ mod tests {
     #[test]
     fn url_carries_the_resume_cursor() {
         let source = BinanceSource::with_base(reqwest::Client::new(), "http://mock");
-        let url = source.url("SOLUSDT", "4h", Some(1_700_000_000_000));
+        let url = source.url("SOLUSDT", "4h", Some(1_700_000_000_000), None);
         assert!(url.contains("symbol=SOLUSDT"));
         assert!(url.contains("interval=4h"));
         assert!(url.contains("startTime=1700000000000"));
-        assert!(!source.url("SOLUSDT", "4h", None).contains("startTime"));
+        assert!(!url.contains("endTime"));
+        assert!(!source
+            .url("SOLUSDT", "4h", None, None)
+            .contains("startTime"));
+    }
+
+    #[test]
+    fn backfill_window_asks_for_a_page_ending_before_the_cursor() {
+        let source = BinanceSource::with_base(reqwest::Client::new(), "http://mock");
+        let until = 1_700_000_000_000;
+        let url = source.url(
+            "BTCUSDT",
+            "4h",
+            Some(until - 1000 * 14_400_000),
+            Some(until),
+        );
+        assert!(url.contains("startTime=1685600000000"));
+        assert!(url.contains("endTime=1700000000000"));
     }
 }
