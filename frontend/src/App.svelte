@@ -45,9 +45,13 @@
   let pivotsOn = $state(false);
   let lookback = $state(PIVOT_DEFAULT);
   let pivots = $state([]);
-  // Which symbol the pivots in hand belong to; anything else must never reach the
-  // chart, or switching symbols would draw one instrument's levels on another.
-  let pivotsSymbol = $state(null);
+  // What the swings in hand describe: "BTCUSDT:15". Data with any other key must
+  // never reach the chart (it belongs to another instrument or strength), and the
+  // toggle uses the same key to know whether it still has something valid to show.
+  let pivotsKey = $state('');
+  // Which instrument the candles on screen belong to: while a switch is loading,
+  // the old bars stay visible, so only their own swings may be drawn on them.
+  let drawnSymbol = $state('');
 
   let rows = $derived(sortSymbols(markets));
   let activeRow = $derived(rows.find((row) => row.symbol === selected) ?? null);
@@ -55,8 +59,10 @@
   let decimals = $derived(activeRow?.decimals ?? 2);
   let spread = $derived(emaSpread(snap?.ema50, snap?.ema200));
   let stale = $derived(!lastLoaded || now - lastLoaded > 5 * 60_000);
-  // Only the swings of the symbol on screen are drawn.
-  let chartPivots = $derived(pivotsSymbol === selected ? pivots : []);
+  let wantedKey = $derived(`${selected}:${lookback}`);
+  let pivotsReady = $derived(pivotsKey === wantedKey);
+  // Only the swings of the instrument actually drawn, at the strength asked for.
+  let chartPivots = $derived(pivotsKey === `${drawnSymbol}:${lookback}` ? pivots : []);
   let levels = $derived(keyLevels(chartPivots, snap?.last_close ?? null));
   let resistance = $derived(levels.above[0] ?? null);
   let support = $derived(levels.below[0] ?? null);
@@ -101,6 +107,7 @@
       const payload = await fetchCandles(symbol, tf, CHART_BARS, controller.signal);
       if (controller.signal.aborted) return;
       points = payload.points ?? [];
+      drawnSymbol = symbol;
       lastLoaded = Date.now();
       error = '';
     } catch (err) {
@@ -119,18 +126,20 @@
       const payload = await fetchPivots(symbol, strength, controller.signal);
       if (controller.signal.aborted) return;
       pivots = payload.pivots ?? [];
-      pivotsSymbol = payload.symbol ?? symbol;
+      pivotsKey = `${payload.symbol ?? symbol}:${strength}`;
     } catch (err) {
       if (err?.name === 'AbortError') return;
       pivots = [];
-      pivotsSymbol = symbol;
+      pivotsKey = `${symbol}:${strength}`;
     }
   }
 
   async function togglePivots() {
     pivotsOn = !pivotsOn;
     savePrefs();
-    if (pivotsOn && pivots.length === 0) await loadPivots();
+    // Turning the toggle on after a symbol switch has nothing valid in hand, so
+    // it must fetch; same for a strength that changed while the toggle was off.
+    if (pivotsOn && !pivotsReady) await loadPivots();
   }
 
   async function setLookback(value) {
@@ -300,7 +309,7 @@
             <span class="dist num">{formatPct(levelDistance(support.price, snap?.last_close))}</span>
           </span>
         {/if}
-        {#if pivotsSymbol === selected && pivots.length === 0}
+        {#if pivotsReady && chartPivots.length === 0}
           <span class="level-empty">No pivots at {lookback}/side for this history</span>
         {/if}
       {/if}

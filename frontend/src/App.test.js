@@ -295,12 +295,16 @@ describe('App pivots while switching', () => {
 
     expect(api.fetchPivots).toHaveBeenCalledTimes(2);
     expect(pivots.calls[1].args[0]).toBe('BTCUSDT');
-    // SOL swings are gone the moment the instruments change.
+    // The SOL bars are still on screen, so their own swing stays drawn on them
+    // until the BTC series replaces them.
+    expect(latestChart().candles.markers).toHaveLength(1);
+
+    candles.calls[1].resolve({ symbol: 'BTCUSDT', timeframe: 'H4', points: h4(9, T0, 60000) });
+    await flush();
     expect(latestChart().candles.markers).toEqual([]);
     expect(latestChart().candles.priceLines).toHaveLength(0);
     expect(view.container.querySelectorAll('.level-chip')).toHaveLength(0);
 
-    candles.calls[1].resolve({ symbol: 'BTCUSDT', timeframe: 'H4', points: h4(9, T0, 60000) });
     pivots.calls[1].resolve({ symbol: 'BTCUSDT', pivots: [] });
     await flush();
     expect(latestChart().candles.markers).toEqual([]);
@@ -336,5 +340,146 @@ describe('App pivots while switching', () => {
     expect(latestChart().candles.markers).toEqual([]);
     expect(latestChart().candles.priceLines).toHaveLength(0);
     expect(view.container.querySelectorAll('.level-chip')).toHaveLength(0);
+  });
+});
+
+describe('App toggling pivots around symbol changes', () => {
+  const swing = { time: T0 + 2 * 4 * HOUR, price: 10.6, kind: 'high' };
+
+  it('fetches the new symbol swings when pivots are re-enabled after a switch', async () => {
+    const view = await boot();
+    const toggle = view.container.querySelector('.pivot-toggle');
+
+    toggle.click();
+    await flush();
+    pivots.calls[0].resolve({ symbol: 'SOLUSDT', pivots: [swing] });
+    await flush();
+
+    toggle.click(); // off
+    await flush();
+    rowButton(view.container, 'BTCUSDT').click(); // switch with pivots off
+    await flush();
+    expect(candles.calls[1].args[0]).toBe('BTCUSDT');
+
+    toggle.click(); // on again, now on BTC
+    await flush();
+
+    expect(api.fetchPivots).toHaveBeenCalledTimes(2);
+    expect(pivots.calls[1].args[0]).toBe('BTCUSDT');
+
+    candles.calls[1].resolve({ symbol: 'BTCUSDT', timeframe: 'H4', points: h4(9, T0, 60000) });
+    pivots.calls[1].resolve({
+      symbol: 'BTCUSDT',
+      pivots: [{ time: T0 + 2 * 4 * HOUR, price: 60000.6, kind: 'high' }],
+    });
+    await flush();
+
+    expect(latestChart().candles.markers).toHaveLength(1);
+    expect(view.container.querySelectorAll('.level-chip').length).toBeGreaterThan(0);
+  });
+
+  it('keeps the swings on screen when toggled off and on again on the same symbol', async () => {
+    const view = await boot();
+    const toggle = view.container.querySelector('.pivot-toggle');
+
+    toggle.click();
+    await flush();
+    pivots.calls[0].resolve({ symbol: 'SOLUSDT', pivots: [swing] });
+    await flush();
+    expect(latestChart().candles.markers).toHaveLength(1);
+
+    toggle.click();
+    await flush();
+    expect(latestChart().candles.markers).toEqual([]);
+
+    toggle.click();
+    await flush();
+    expect(latestChart().candles.markers).toHaveLength(1);
+    expect(api.fetchPivots).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the swings when a symbol change happens while pivots are on', async () => {
+    const view = await boot();
+    const toggle = view.container.querySelector('.pivot-toggle');
+
+    toggle.click();
+    await flush();
+    pivots.calls[0].resolve({ symbol: 'SOLUSDT', pivots: [swing] });
+    await flush();
+
+    rowButton(view.container, 'BTCUSDT').click();
+    await flush();
+    candles.calls[1].resolve({ symbol: 'BTCUSDT', timeframe: 'H4', points: h4(9, T0, 60000) });
+    pivots.calls[1].resolve({
+      symbol: 'BTCUSDT',
+      pivots: [{ time: T0 + 2 * 4 * HOUR, price: 60000.6, kind: 'high' }],
+    });
+    await flush();
+    expect(latestChart().candles.markers).toHaveLength(1);
+
+    toggle.click();
+    await flush();
+    expect(latestChart().candles.markers).toEqual([]);
+
+    toggle.click();
+    await flush();
+    expect(latestChart().candles.markers).toHaveLength(1);
+    expect(view.container.querySelectorAll('.level-chip').length).toBeGreaterThan(0);
+  });
+
+  it('refetches at the current strength after switching symbol while off', async () => {
+    const view = await boot();
+    const toggle = view.container.querySelector('.pivot-toggle');
+
+    toggle.click();
+    await flush();
+    pivots.calls[0].resolve({ symbol: 'SOLUSDT', pivots: [swing] });
+    await flush();
+
+    view.container.querySelectorAll('.stepper button')[0].click(); // 15 -> 10
+    await flush();
+    pivots.calls[1].resolve({ symbol: 'SOLUSDT', pivots: [swing] });
+    await flush();
+
+    toggle.click(); // off
+    await flush();
+    rowButton(view.container, 'BTCUSDT').click();
+    await flush();
+    toggle.click(); // on
+    await flush();
+
+    expect(api.fetchPivots).toHaveBeenCalledTimes(3);
+    expect(pivots.calls[2].args[0]).toBe('BTCUSDT');
+    expect(pivots.calls[2].args[1]).toBe(10);
+  });
+});
+
+describe('App pivots arriving before the candles', () => {
+  it('does not paint the new symbol swings on the old chart', async () => {
+    const view = await boot();
+    const toggle = view.container.querySelector('.pivot-toggle');
+    toggle.click();
+    await flush();
+    pivots.calls[0].resolve({ symbol: 'SOLUSDT', pivots: [{ time: T0 + 2 * 4 * HOUR, price: 10.6, kind: 'high' }] });
+    await flush();
+    expect(latestChart().candles.markers).toHaveLength(1);
+
+    rowButton(view.container, 'BTCUSDT').click();
+    await flush();
+
+    // Swings for BTC land before BTC candles do: the chart still holds SOL bars,
+    // so the BTC level must not be painted on them.
+    pivots.calls[1].resolve({
+      symbol: 'BTCUSDT',
+      pivots: [{ time: T0 + 2 * 4 * HOUR, price: 60800, kind: 'high' }],
+    });
+    await flush();
+    expect(latestChart().candles.markers).toEqual([]);
+    expect(latestChart().candles.priceLines).toHaveLength(0);
+
+    candles.calls[1].resolve({ symbol: 'BTCUSDT', timeframe: 'H4', points: h4(9, T0, 60000) });
+    await flush();
+    expect(latestChart().candles.markers).toHaveLength(1);
+    expect(latestChart().candles.priceLines.length).toBeGreaterThan(0);
   });
 });
