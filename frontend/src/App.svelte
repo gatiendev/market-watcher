@@ -11,6 +11,7 @@
     formatPrice,
     formatRelative,
     sortSymbols,
+    trendLabel,
   } from './lib/format.js';
 
   const POLL_MS = 60_000;
@@ -150,7 +151,7 @@
     <div class="chart-head">
       <div class="instrument">
         <span class="ticker num">{activeRow?.symbol ?? '—'}</span>
-        <span class="sub">{activeRow?.label ?? ''}{snap?.bars ? ` · ${snap.bars} bars cached` : ''}</span>
+        <span class="sub">{timeframe} · {activeRow?.label ?? ''}{snap?.bars ? ` · ${snap.bars} bars cached` : ''}</span>
       </div>
 
       <div class="quote">
@@ -170,7 +171,7 @@
         <span class="label">EMA 200</span>
         <span class="value">{formatPrice(snap?.ema200, decimals)}</span>
       </span>
-      <span class="badge {snap?.trend ?? ''}">{timeframe}</span>
+      <span class="badge {snap?.trend ?? ''}">{trendLabel(snap?.trend)}</span>
       {#if spread !== null}
         <span class="spread">50/200 spread {formatPct(spread)}</span>
       {/if}

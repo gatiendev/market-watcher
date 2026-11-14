@@ -15,7 +15,12 @@ failures = []
 
 
 def get(path, method="GET"):
-    req = urllib.request.Request(BASE + path, method=method, headers={"accept": "application/json"})
+    req = urllib.request.Request(
+        BASE + path,
+        method=method,
+        # Bot filters in front of the app reject the default Python user agent.
+        headers={"accept": "application/json", "user-agent": "Mozilla/5.0 (market-watcher smoke)"},
+    )
     with urllib.request.urlopen(req, timeout=90) as response:
         return response.status, json.loads(response.read() or b"{}")
 

@@ -81,6 +81,19 @@ frontend/src/App.svelte    shell, polling, selection
 frontend/src/lib/          watchlist table, chart, API client, formatters
 ```
 
+## Deployment
+
+Live at **https://trading.gatiendevictor.com** (loopback origin `127.0.0.1:8790`, fronted by
+nginx-proxy-manager which reaches `market-watcher-frontend` over the `gatien_app-network` network).
+
+```bash
+docker compose up -d --build          # build + start both containers
+docker compose ps                     # backend should report (healthy)
+docker compose logs -f backend        # sync log, one line per series
+```
+
+Redeploying a frontend-only change: `docker compose up -d --build --no-deps frontend`.
+
 ## Operations
 
 - Database lives in the `market-data` volume (`/data/market.db`, WAL mode).
