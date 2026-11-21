@@ -204,6 +204,52 @@ describe('crossings page', () => {
     expect(view.container.querySelector('.summary').textContent).toContain('avg peak +5.00%');
   });
 
+  it('renders the same crossings as cards for a phone', async () => {
+    api.fetchCrossings.mockResolvedValue(payload());
+    const view = render(Crossings);
+    await flush();
+
+    const cards = view.container.querySelectorAll('.cross-card');
+    expect(cards).toHaveLength(2);
+    expect(cards[0].textContent).toContain('BTCUSDT');
+    expect(cards[0].textContent).toContain('open');
+    expect(cards[1].textContent).toContain('+8.00%');
+    expect(cards[1].textContent).toContain('2.0d');
+    expect(cards[1].textContent).toContain('Result');
+    expect(cards[1].textContent).toContain('Trough → peak');
+  });
+
+  it('pages the phone cards instead of dumping every crossing at once', async () => {
+    const rows = Array.from({ length: 60 }, (_, index) =>
+      crossing({ crossed_at: T0 - index * 14_400 }),
+    );
+    api.fetchCrossings.mockResolvedValue({
+      generated_at: T0 * 1000,
+      rows,
+      summaries: [summary({ crossings: 60, ups: 60, downs: 0 })],
+    });
+    const view = render(Crossings);
+    await flush();
+
+    expect(view.container.querySelectorAll('.cross-card')).toHaveLength(25);
+    expect(view.container.querySelector('.more').textContent).toContain('35 left');
+
+    view.container.querySelector('.more').click();
+    await flush();
+    expect(view.container.querySelectorAll('.cross-card')).toHaveLength(50);
+    expect(view.container.querySelector('.more').textContent).toContain('10 left');
+
+    // The desktop table is never paged.
+    expect(view.container.querySelectorAll('table.crossings tbody tr')).toHaveLength(60);
+
+    // Leaving the timeframe and coming back starts at the first page again.
+    timeframeButton(view.container, 'D1').click();
+    await flush();
+    timeframeButton(view.container, 'H4').click();
+    await flush();
+    expect(view.container.querySelectorAll('.cross-card')).toHaveLength(25);
+  });
+
   it('says so when the chosen asset has no cross on that timeframe', async () => {
     api.fetchCrossings.mockResolvedValue(payload());
     const view = render(Crossings);

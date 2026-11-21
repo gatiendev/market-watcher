@@ -53,7 +53,8 @@ move (peak), how many days that took, the worst adverse move before it, the swin
 to the peak, and the run's result. A run lasts until the opposite crossing; the newest one is marked
 **open**. Every figure is direction-relative, so a positive number always means the signal worked.
 The table carries the averages for the rows in it (median days to peak included), for all assets or
-one.
+one. On a phone each crossing is a card instead of a table row (the same figures, stacked), shown 25
+at a time behind a "show more" button, and the asset chips scroll sideways on one line.
 
 ## Run it
 
