@@ -11,7 +11,7 @@
     trendGlyph,
   } from './lib/format.js';
 
-  // Both timeframes are always shown: the page is the full record, not a filter.
+  // One table at a time, switched by the toggle in the header.
   const TIMEFRAMES = ['H4', 'D1'];
   const ALL = 'ALL';
 
@@ -20,25 +20,25 @@
   let loading = $state(true);
   let error = $state('');
   let filter = $state(ALL);
+  let timeframe = $state('H4');
 
   let symbols = $derived([...new Set(rows.map((row) => row.symbol))]);
   let visible = $derived(filter === ALL ? rows : rows.filter((row) => row.symbol === filter));
-
-  function timeframeRows(timeframe) {
-    return visible.filter((row) => row.timeframe === timeframe);
-  }
+  let shown = $derived(visible.filter((row) => row.timeframe === timeframe));
 
   // The server sends one summary for every asset and one per asset, so the
   // figures under a table always describe the rows in that table.
-  function summaryFor(timeframe) {
+  function summaryFor(tf) {
     return (
       summaries.find(
         (summary) =>
-          summary.timeframe === timeframe &&
+          summary.timeframe === tf &&
           (filter === ALL ? summary.symbol === null : summary.symbol === filter),
       ) ?? null
     );
   }
+
+  let activeSummary = $derived(summaryFor(timeframe));
 
   function labelFor(symbol) {
     return rows.find((row) => row.symbol === symbol)?.label ?? '';
@@ -66,6 +66,11 @@
     </div>
 
     <div class="controls">
+      <div class="segmented" role="group" aria-label="Timeframe">
+        {#each TIMEFRAMES as tf}
+          <button aria-pressed={tf === timeframe} onclick={() => (timeframe = tf)}>{tf}</button>
+        {/each}
+      </div>
       <div class="chips" role="group" aria-label="Asset">
         <button class="chip" aria-pressed={filter === ALL} onclick={() => (filter = ALL)}>
           All assets
@@ -98,103 +103,106 @@
         </p>
       </section>
     {:else}
-      {#each TIMEFRAMES as timeframe}
-        {@const list = timeframeRows(timeframe)}
-        {@const summary = summaryFor(timeframe)}
-        {#if list.length > 0}
-          <section class="panel">
-            <div class="panel-head">
-              <h2>{timeframe} crossings</h2>
-              <span class="hint">
-                {filter === ALL ? 'all assets' : labelFor(filter)} · newest first
+      <section class="panel">
+        <div class="panel-head">
+          <h2>{timeframe} crossings</h2>
+          <span class="hint">
+            {filter === ALL ? 'all assets' : labelFor(filter)} · newest first
+          </span>
+        </div>
+
+        {#if shown.length === 0}
+          <p class="panel-empty">
+            No {timeframe} crossing stored yet for {filter === ALL ? 'these assets' : filter}.
+          </p>
+        {:else}
+          {#if activeSummary}
+            <p class="summary">
+              <span class="stat">
+                <b>{activeSummary.crossings}</b>
+                {activeSummary.crossings === 1 ? 'crossing' : 'crossings'}
               </span>
-            </div>
+              <span class="stat">
+                <b class="up">{trendGlyph('up')} {activeSummary.ups}</b> up ·
+                <b class="down">{trendGlyph('down')} {activeSummary.downs}</b> down
+              </span>
+              <span class="stat">
+                avg peak <b class={changeClass(activeSummary.avg_peak_pct)}>{formatPct(activeSummary.avg_peak_pct)}</b>
+              </span>
+              <span class="stat">
+                median <b>{formatDays(activeSummary.median_days_to_peak)}</b> to peak
+              </span>
+              <span class="stat">
+                trough → peak <b>{formatPct(activeSummary.avg_trough_to_peak_pct)}</b>
+              </span>
+              {#if activeSummary.avg_exit_pct !== null}
+                <span class="stat">
+                  avg result <b class={changeClass(activeSummary.avg_exit_pct)}>{formatPct(activeSummary.avg_exit_pct)}</b>
+                </span>
+              {/if}
+              {#if activeSummary.open_runs > 0}
+                <span class="stat"><b>{activeSummary.open_runs}</b> still open</span>
+              {/if}
+            </p>
+          {/if}
 
-            {#if summary}
-              <p class="summary">
-                <span class="stat"><b>{summary.crossings}</b> crossings</span>
-                <span class="stat">
-                  <b class="up">{trendGlyph('up')} {summary.ups}</b> up ·
-                  <b class="down">{trendGlyph('down')} {summary.downs}</b> down
-                </span>
-                <span class="stat">
-                  avg peak <b class={changeClass(summary.avg_peak_pct)}>{formatPct(summary.avg_peak_pct)}</b>
-                </span>
-                <span class="stat">
-                  median <b>{formatDays(summary.median_days_to_peak)}</b> to peak
-                </span>
-                <span class="stat">
-                  trough → peak <b>{formatPct(summary.avg_trough_to_peak_pct)}</b>
-                </span>
-                {#if summary.avg_exit_pct !== null}
-                  <span class="stat">
-                    avg result <b class={changeClass(summary.avg_exit_pct)}>{formatPct(summary.avg_exit_pct)}</b>
-                  </span>
-                {/if}
-                {#if summary.open_runs > 0}
-                  <span class="stat"><b>{summary.open_runs}</b> still open</span>
-                {/if}
-              </p>
-            {/if}
-
-            <div class="cross-table-wrap">
-              <table class="crossings">
-                <thead>
+          <div class="cross-table-wrap">
+            <table class="crossings">
+              <thead>
+                <tr>
+                  <th>Asset</th>
+                  <th>Crossed</th>
+                  <th>Dir</th>
+                  <th>Price</th>
+                  <th>Peak</th>
+                  <th>To peak</th>
+                  <th>Trough</th>
+                  <th>Trough → peak</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each shown as row (row.symbol + row.timeframe + row.crossed_at)}
                   <tr>
-                    <th>Asset</th>
-                    <th>Crossed</th>
-                    <th>Dir</th>
-                    <th>Price</th>
-                    <th>Peak</th>
-                    <th>To peak</th>
-                    <th>Trough</th>
-                    <th>Trough → peak</th>
-                    <th>Result</th>
+                    <td class="asset">
+                      <span class="ticker num">{row.symbol}</span>
+                      <span class="name">{row.label}</span>
+                    </td>
+                    <td class="num when" title={formatBarTime(row.crossed_at * 1000)}>
+                      {formatDate(row.crossed_at * 1000)}
+                    </td>
+                    <td>
+                      <span class="badge {row.direction}">
+                        {trendGlyph(row.direction)} {row.direction}
+                      </span>
+                    </td>
+                    <td class="num">{formatPrice(row.price, row.decimals)}</td>
+                    <td class="num {changeClass(row.peak_pct)}">{formatPct(row.peak_pct)}</td>
+                    <td
+                      class="num days"
+                      title={`${row.peak_bars} ${timeframe} bars to the peak · run lasted ${formatDays(
+                        row.run_days,
+                      )}`}
+                    >
+                      {formatDays(row.days_to_peak)}
+                    </td>
+                    <td class="num {changeClass(row.trough_pct)}">{formatPct(row.trough_pct)}</td>
+                    <td class="num {changeClass(row.trough_to_peak_pct)}">
+                      {formatPct(row.trough_to_peak_pct)}
+                    </td>
+                    <td class="num result">
+                      <span class={changeClass(row.exit_pct)}>{formatPct(row.exit_pct)}</span>
+                      {#if row.open}
+                        <span class="open-badge" title="This run is the current trend">open</span>
+                      {/if}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {#each list as row (row.symbol + row.timeframe + row.crossed_at)}
-                    <tr>
-                      <td class="asset">
-                        <span class="ticker num">{row.symbol}</span>
-                        <span class="name">{row.label}</span>
-                      </td>
-                      <td class="num when" title={formatBarTime(row.crossed_at * 1000)}>
-                        {formatDate(row.crossed_at * 1000)}
-                      </td>
-                      <td>
-                        <span class="badge {row.direction}">
-                          {trendGlyph(row.direction)} {row.direction}
-                        </span>
-                      </td>
-                      <td class="num">{formatPrice(row.price, row.decimals)}</td>
-                      <td class="num {changeClass(row.peak_pct)}">{formatPct(row.peak_pct)}</td>
-                      <td
-                        class="num days"
-                        title={`${row.peak_bars} ${timeframe} bars to the peak · run lasted ${formatDays(
-                          row.run_days,
-                        )}`}
-                      >
-                        {formatDays(row.days_to_peak)}
-                      </td>
-                      <td class="num {changeClass(row.trough_pct)}">{formatPct(row.trough_pct)}</td>
-                      <td class="num {changeClass(row.trough_to_peak_pct)}">
-                        {formatPct(row.trough_to_peak_pct)}
-                      </td>
-                      <td class="num result">
-                        <span class={changeClass(row.exit_pct)}>{formatPct(row.exit_pct)}</span>
-                        {#if row.open}
-                          <span class="open-badge" title="This run is the current trend">open</span>
-                        {/if}
-                      </td>
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-            </div>
-          </section>
+                {/each}
+              </tbody>
+            </table>
+          </div>
         {/if}
-      {/each}
+      </section>
     {/if}
   </main>
 

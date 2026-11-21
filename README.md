@@ -47,12 +47,13 @@ API every 60s and has a manual **Refresh** button that hits the providers immedi
 
 ## Crossings page
 
-`/crossings` lists every past EMA 50 / EMA 200 flip on both timeframes, newest first, with what
-price did inside the run each cross opened: the best favourable move (peak), how many days that
-took, the worst adverse move before it, the swing from that extreme to the peak, and the run's
-result. A run lasts until the opposite crossing; the newest one is marked **open**. Every figure is
-direction-relative, so a positive number always means the signal worked. Each table carries the
-averages for the rows in it (median days to peak included), for all assets or one.
+`/crossings` lists every past EMA 50 / EMA 200 flip on H4 or D1 (the header toggle picks the
+table), newest first, with what price did inside the run each cross opened: the best favourable
+move (peak), how many days that took, the worst adverse move before it, the swing from that extreme
+to the peak, and the run's result. A run lasts until the opposite crossing; the newest one is marked
+**open**. Every figure is direction-relative, so a positive number always means the signal worked.
+The table carries the averages for the rows in it (median days to peak included), for all assets or
+one.
 
 ## Run it
 
