@@ -18,7 +18,6 @@
   const CARD_PAGE = 25;
 
   let rows = $state([]);
-  let summaries = $state([]);
   let loading = $state(true);
   let error = $state('');
   let filter = $state(ALL);
@@ -27,26 +26,61 @@
 
   let symbols = $derived([...new Set(rows.map((row) => row.symbol))]);
   let visible = $derived(filter === ALL ? rows : rows.filter((row) => row.symbol === filter));
-  let shown = $derived(visible.filter((row) => row.timeframe === timeframe));
+  // Newest crossing first across every asset, which is what the panel promises:
+  // the API groups its rows per series.
+  let shown = $derived(
+    visible
+      .filter((row) => row.timeframe === timeframe)
+      .sort((a, b) => b.crossed_at - a.crossed_at),
+  );
   let cards = $derived(shown.slice(0, cardLimit));
 
   function resetCards() {
     cardLimit = CARD_PAGE;
   }
 
-  // The server sends one summary for every asset and one per asset, so the
-  // figures under a table always describe the rows in that table.
-  function summaryFor(tf) {
-    return (
-      summaries.find(
-        (summary) =>
-          summary.timeframe === tf &&
-          (filter === ALL ? summary.symbol === null : summary.symbol === filter),
-      ) ?? null
-    );
+  // Every figure is price against the crossing close, never direction-relative:
+  // a down run reads negative, the way the price actually moved.
+  function figures(row) {
+    const down = row.direction === 'down';
+    return {
+      high: down ? -row.trough_pct : row.peak_pct,
+      low: down ? -row.peak_pct : row.trough_pct,
+      swing: down ? -row.trough_to_peak_pct : row.trough_to_peak_pct,
+      result: down ? -row.exit_pct : row.exit_pct,
+    };
   }
 
-  let activeSummary = $derived(summaryFor(timeframe));
+  // The swing is the trade a user could actually have taken, in the order the
+  // market made it: buy the dip then sell the high, or sell the high then cover
+  // the low. Never the other way round.
+  function swingLabel(direction) {
+    return direction === 'down' ? 'peak → trough' : 'trough → peak';
+  }
+
+  function median(values) {
+    if (values.length === 0) return 0;
+    const sorted = [...values].sort((a, b) => a - b);
+    const middle = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+  }
+
+  // Averages over exactly the rows on screen, in the same raw terms as the table.
+  let summary = $derived.by(() => {
+    if (shown.length === 0) return null;
+    const list = shown.map(figures);
+    const mean = (values) => values.reduce((total, value) => total + value, 0) / values.length;
+    return {
+      crossings: shown.length,
+      ups: shown.filter((row) => row.direction === 'up').length,
+      downs: shown.filter((row) => row.direction === 'down').length,
+      open: shown.filter((row) => row.open).length,
+      avgHigh: mean(list.map((fig) => fig.high)),
+      avgLow: mean(list.map((fig) => fig.low)),
+      medianDays: median(shown.map((row) => row.days_to_peak)),
+      avgSwing: mean(list.map((fig) => Math.abs(fig.swing))),
+    };
+  });
 
   // The open run of each series is the trend in force right now, so the page can
   // show both timeframes side by side instead of hiding one behind the toggle.
@@ -70,7 +104,6 @@
     try {
       const payload = await fetchCrossings();
       rows = payload.rows ?? [];
-      summaries = payload.summaries ?? [];
     } catch (err) {
       error = err?.message ?? 'Cannot load the crossings';
     } finally {
@@ -176,7 +209,8 @@
                         <span class="k">now</span> {formatPct(nowPct)}
                       </span>
                       <span class="now-peak">
-                        <span class="k">peak</span> {formatPct(peakPct)}
+                        <span class="k">{run.direction === 'down' ? 'trough' : 'peak'}</span>
+                        {formatPct(peakPct)}
                       </span>
                     </span>
                   {:else}
@@ -202,32 +236,28 @@
             No {timeframe} crossing stored yet for {filter === ALL ? 'these assets' : filter}.
           </p>
         {:else}
-          {#if activeSummary}
+          {#if summary}
             <p class="summary">
               <span class="stat">
-                <b>{activeSummary.crossings}</b>
-                {activeSummary.crossings === 1 ? 'crossing' : 'crossings'}
+                <b>{summary.crossings}</b>
+                {summary.crossings === 1 ? 'crossing' : 'crossings'}
               </span>
               <span class="stat">
-                <b class="up">{trendGlyph('up')} {activeSummary.ups}</b> up ·
-                <b class="down">{trendGlyph('down')} {activeSummary.downs}</b> down
+                <b class="up">{trendGlyph('up')} {summary.ups}</b> up ·
+                <b class="down">{trendGlyph('down')} {summary.downs}</b> down
               </span>
               <span class="stat">
-                avg peak <b class={changeClass(activeSummary.avg_peak_pct)}>{formatPct(activeSummary.avg_peak_pct)}</b>
+                avg high <b class={changeClass(summary.avgHigh)}>{formatPct(summary.avgHigh)}</b>
               </span>
               <span class="stat">
-                median <b>{formatDays(activeSummary.median_days_to_peak)}</b> to peak
+                avg low <b class={changeClass(summary.avgLow)}>{formatPct(summary.avgLow)}</b>
               </span>
-              <span class="stat">
-                trough → peak <b>{formatPct(activeSummary.avg_trough_to_peak_pct)}</b>
+              <span class="stat">median <b>{formatDays(summary.medianDays)}</b> to best</span>
+              <span class="stat" title="Average travel from the worst price to the best">
+                avg swing <b>{summary.avgSwing.toFixed(2)}%</b>
               </span>
-              {#if activeSummary.avg_exit_pct !== null}
-                <span class="stat">
-                  avg result <b class={changeClass(activeSummary.avg_exit_pct)}>{formatPct(activeSummary.avg_exit_pct)}</b>
-                </span>
-              {/if}
-              {#if activeSummary.open_runs > 0}
-                <span class="stat"><b>{activeSummary.open_runs}</b> still open</span>
+              {#if summary.open > 0}
+                <span class="stat"><b>{summary.open}</b> still open</span>
               {/if}
             </p>
           {/if}
@@ -240,15 +270,18 @@
                   <th>Crossed</th>
                   <th>Dir</th>
                   <th>Price</th>
-                  <th>Peak</th>
-                  <th>To peak</th>
-                  <th>Trough</th>
-                  <th>Trough → peak</th>
-                  <th>Result</th>
+                  <th title="Highest price of the run, against the crossing close">High</th>
+                  <th title="Lowest price of the run, against the crossing close">Low</th>
+                  <th title="From the adverse extreme to the best price: trough → peak on up runs, peak → trough on down runs">
+                    Swing
+                  </th>
+                  <th title="Days until the best price of the run">To best</th>
+                  <th title="Price change from the crossing close to the end of the run">Result</th>
                 </tr>
               </thead>
               <tbody>
                 {#each shown as row (row.symbol + row.timeframe + row.crossed_at)}
+                  {@const fig = figures(row)}
                   <tr>
                     <td class="asset">
                       <span class="ticker num">{row.symbol}</span>
@@ -263,21 +296,21 @@
                       </span>
                     </td>
                     <td class="num">{formatPrice(row.price, row.decimals)}</td>
-                    <td class="num {changeClass(row.peak_pct)}">{formatPct(row.peak_pct)}</td>
+                    <td class="num {changeClass(fig.high)}">{formatPct(fig.high)}</td>
+                    <td class="num {changeClass(fig.low)}">{formatPct(fig.low)}</td>
+                    <td class="num swing {changeClass(fig.swing)}" title={swingLabel(row.direction)}>
+                      {formatPct(fig.swing)}
+                    </td>
                     <td
                       class="num days"
-                      title={`${row.peak_bars} ${timeframe} bars to the peak · run lasted ${formatDays(
+                      title={`${row.peak_bars} ${timeframe} bars to the best price · run lasted ${formatDays(
                         row.run_days,
                       )}`}
                     >
                       {formatDays(row.days_to_peak)}
                     </td>
-                    <td class="num {changeClass(row.trough_pct)}">{formatPct(row.trough_pct)}</td>
-                    <td class="num {changeClass(row.trough_to_peak_pct)}">
-                      {formatPct(row.trough_to_peak_pct)}
-                    </td>
                     <td class="num result">
-                      <span class={changeClass(row.exit_pct)}>{formatPct(row.exit_pct)}</span>
+                      <span class={changeClass(fig.result)}>{formatPct(fig.result)}</span>
                       {#if row.open}
                         <span class="open-badge" title="This run is the current trend">open</span>
                       {/if}
@@ -291,6 +324,7 @@
           <!-- Phones read the same rows as cards: nine columns never fit a 390px screen. -->
           <ul class="cross-cards">
             {#each cards as row (row.symbol + row.timeframe + row.crossed_at)}
+              {@const fig = figures(row)}
               <li class="cross-card">
                 <div class="card-top">
                   <span class="ticker num">{row.symbol}</span>
@@ -306,27 +340,27 @@
                 </div>
                 <dl class="card-metrics">
                   <div>
-                    <dt>Peak</dt>
-                    <dd class={changeClass(row.peak_pct)}>{formatPct(row.peak_pct)}</dd>
+                    <dt>High</dt>
+                    <dd class={changeClass(fig.high)}>{formatPct(fig.high)}</dd>
                   </div>
                   <div>
-                    <dt>Days to peak</dt>
-                    <dd>{formatDays(row.days_to_peak)}</dd>
+                    <dt>Low</dt>
+                    <dd class={changeClass(fig.low)}>{formatPct(fig.low)}</dd>
                   </div>
                   <div>
-                    <dt>Trough</dt>
-                    <dd class={changeClass(row.trough_pct)}>{formatPct(row.trough_pct)}</dd>
-                  </div>
-                  <div>
-                    <dt>Trough → peak</dt>
-                    <dd class={changeClass(row.trough_to_peak_pct)}>
-                      {formatPct(row.trough_to_peak_pct)}
+                    <dt>Swing</dt>
+                    <dd class={changeClass(fig.swing)} title={swingLabel(row.direction)}>
+                      {formatPct(fig.swing)}
                     </dd>
+                  </div>
+                  <div>
+                    <dt>Days to best</dt>
+                    <dd>{formatDays(row.days_to_peak)}</dd>
                   </div>
                 </dl>
                 <div class="card-result">
                   <span class="label">Result</span>
-                  <span class="value {changeClass(row.exit_pct)}">{formatPct(row.exit_pct)}</span>
+                  <span class="value {changeClass(fig.result)}">{formatPct(fig.result)}</span>
                   {#if row.open}
                     <span class="open-badge" title="This run is the current trend">open</span>
                   {/if}
@@ -352,7 +386,9 @@
     <span class="sep"></span>
     <span>A run ends at the opposite crossing</span>
     <span class="sep"></span>
-    <span>Favourable and adverse moves are read in the signal's direction</span>
+    <span>High, low and result are price against the crossing close</span>
+    <span class="sep"></span>
+    <span>Swing runs from the worst price to the best, in the order they happened</span>
     <span class="sep"></span>
     <span>Crypto: Binance · FX &amp; index: Yahoo Finance</span>
   </footer>

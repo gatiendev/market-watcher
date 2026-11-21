@@ -48,18 +48,25 @@ API every 60s and has a manual **Refresh** button that hits the providers immedi
 ## Crossings page
 
 `/crossings` opens with **Right now**: one block per asset showing the trend in force on H4 *and* D1
-at once (direction, age in days, the price now against the crossing close, and how far price got),
-whatever the toggle is set to. Those two figures are plain price moves, so a down trend that paid
-reads negative - unlike the table below, whose figures are direction-relative. Below it, the page lists every past EMA 50 / EMA 200 flip on H4 or D1 (the header toggle
-picks the table), newest first, with what price did inside the run each cross opened: the best favourable
-move (peak), how many days that took, the worst adverse move before it, the swing from that extreme
-to the peak, and the run's result. A run lasts until the opposite crossing; the newest one is marked
-**open**. Every figure is direction-relative, so a positive number always means the signal worked.
-The table carries the averages for the rows in it (median days to peak included), for all assets or
-one. On a phone each crossing is a card instead of a table row (the same figures, stacked), shown 25
-at a time behind a "show more" button, and the asset chips scroll sideways on one line. The header
-never widens the page: the brand and the way back share a row, the toggle and the chips wrap under
-them, and a table too wide for the screen scrolls inside its own box.
+at once (direction, age in days, the price now against the crossing close, and the best price the run
+reached), whatever the toggle is set to. On a down run the best price is the low, so the figure is
+named `trough`; on an up run it is the `peak`. Below it, the page lists every past EMA 50 / EMA 200
+flip on H4 or D1 (the header toggle picks the table), newest crossing first across every asset, with
+what price did inside the run that cross opened: the highest and lowest price, the swing between
+them, how long the best price took, and the run's result. A run lasts until the opposite crossing;
+the newest one is marked **open**.
+
+Every figure is price against the crossing close, never direction-relative, so a down run reads
+negative the way the price actually moved. The swing is the trade a user could actually have taken,
+in the order the market made it: **trough → peak** on an up run (buy the dip, sell the high) and
+**peak → trough** on a down run (sell the high, cover the low). It is never the other way round.
+
+The summary line above the table is computed from the rows on screen: how many crossings, the up and
+down split, average high and low, median days to the best price, average swing, and how many runs are
+still open. On a phone each crossing is a card instead of a table row (the same figures, stacked),
+shown 25 at a time behind a "show more" button, and the asset chips scroll sideways on one line. The
+header never widens the page: the brand and the way back share a row, the toggle and the chips wrap
+under them, and a table too wide for the screen scrolls inside its own box.
 
 ## Run it
 

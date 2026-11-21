@@ -152,13 +152,38 @@ describe('crossings page', () => {
 
     expect(crossingHeadings(view.container)).toEqual(['H4 crossings']);
 
+    const headers = [...view.container.querySelectorAll('table.crossings thead th')].map((th) =>
+      th.textContent.trim(),
+    );
+    expect(headers).toEqual(['Asset', 'Crossed', 'Dir', 'Price', 'High', 'Low', 'Swing', 'To best', 'Result']);
+
     const rows = tableRows(view.container);
     expect(rows).toHaveLength(2);
     expect(rows[0].textContent).toContain('BTCUSDT');
     expect(rows[0].textContent).toContain('open');
     expect(rows[1].textContent).toContain('+8.00%');
     expect(rows[1].textContent).toContain('2.0d');
-    expect(view.container.textContent).toContain('trough → peak');
+  });
+
+  it('reads the swing the way the trade could have been taken', async () => {
+    api.fetchCrossings.mockResolvedValue(payload());
+    const view = render(Crossings);
+    await flush();
+
+    const [downRow, upRow] = tableRows(view.container);
+
+    // Down run: price first rose to +1%, then fell to -8%. The trade is the fall
+    // from the high to the low, so the swing is negative and reads peak → trough.
+    expect(downRow.textContent).toContain('+1.00%');
+    expect(downRow.textContent).toContain('-8.00%');
+    const downSwing = downRow.querySelector('td.swing');
+    expect(downSwing.textContent.trim()).toBe('-9.09%');
+    expect(downSwing.getAttribute('title')).toBe('peak → trough');
+
+    // Up run: the dip came first, then the high, so the swing is a positive rise.
+    const upSwing = upRow.querySelector('td.swing');
+    expect(upSwing.textContent.trim()).toBe('+9.09%');
+    expect(upSwing.getAttribute('title')).toBe('trough → peak');
   });
 
   it('switches the table to D1 when the toggle is used', async () => {
@@ -188,8 +213,10 @@ describe('crossings page', () => {
     expect(summaryLine.textContent).toContain('2 crossings');
     expect(summaryLine.textContent).toContain('1 up');
     expect(summaryLine.textContent).toContain('1 down');
-    expect(summaryLine.textContent).toContain('avg peak +6.50%');
-    expect(summaryLine.textContent).toContain('median 1.5d to peak');
+    expect(summaryLine.textContent).toContain('avg high +4.50%');
+    expect(summaryLine.textContent).toContain('avg low -4.50%');
+    expect(summaryLine.textContent).toContain('median 2.0d to best');
+    expect(summaryLine.textContent).toContain('avg swing 9.09%');
     expect(summaryLine.textContent).toContain('1 still open');
   });
 
@@ -205,7 +232,7 @@ describe('crossings page', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].textContent).toContain('BTCUSDT');
     expect([...rows].some((row) => row.textContent.includes('SOLUSDT'))).toBe(false);
-    expect(view.container.querySelector('.summary').textContent).toContain('avg peak +5.00%');
+    expect(view.container.querySelector('.summary').textContent).toContain('avg high +1.00%');
   });
 
   it('shows the trend in force on both timeframes, whatever the toggle says', async () => {
@@ -261,13 +288,16 @@ describe('crossings page', () => {
     // Price against the crossing, not the direction-relative result: a down trend
     // that paid 33.5% is price 33.5% lower, so it reads negative.
     expect(solH4.textContent).toContain('-33.50%');
-    expect(solH4.textContent).toContain('peak -37.60%');
+    // On a down run the best price is the low, so the figure is named for it.
+    expect(solH4.textContent).toContain('trough -37.60%');
+    expect(solH4.textContent).not.toContain('peak -37.60%');
     expect(solH4.textContent).not.toContain('+33.50%');
     expect(solD1.textContent).toContain('D1');
     expect(solD1.textContent).toContain('up');
     expect(solD1.textContent).toContain('5.0d');
     // An up trend whose price fell shows the fall, not a positive "result".
     expect(solD1.textContent).toContain('+3.10%');
+    expect(solD1.textContent).toContain('peak +4.20%');
 
     // BTC has no stored D1 crossing, and the page says so instead of going blank.
     expect(assets[1].textContent).toContain('BTCUSDT');
@@ -287,7 +317,12 @@ describe('crossings page', () => {
     expect(cards[1].textContent).toContain('+8.00%');
     expect(cards[1].textContent).toContain('2.0d');
     expect(cards[1].textContent).toContain('Result');
-    expect(cards[1].textContent).toContain('Trough → peak');
+    expect(cards[1].textContent).toContain('Swing');
+    expect(cards[1].textContent).toContain('+9.09%');
+    // The down card carries the same sign flip as the table.
+    expect(cards[0].textContent).toContain('+1.00%');
+    expect(cards[0].textContent).toContain('-8.00%');
+    expect(cards[0].textContent).toContain('-9.09%');
   });
 
   it('pages the phone cards instead of dumping every crossing at once', async () => {
