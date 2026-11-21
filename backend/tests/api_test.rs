@@ -516,3 +516,170 @@ async fn candles_fill_an_empty_series_once() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(source.calls(), 1);
 }
+
+/// Eight daily bars: an up run that peaks, then a fall that is still running.
+fn crossing_fixture() -> Vec<Candle> {
+    let step = Timeframe::D1.bucket_ms();
+    let start = day_start();
+    let rows = [
+        (100.0, 101.0, 99.0),
+        (100.0, 101.0, 99.0),
+        (102.0, 104.0, 101.0),
+        (105.0, 108.0, 103.0),
+        (103.0, 105.0, 90.0),
+        (103.0, 104.0, 102.0),
+        (99.0, 101.0, 97.0),
+        (100.0, 102.0, 96.0),
+    ];
+    rows.iter()
+        .enumerate()
+        .map(|(idx, (close, high, low))| {
+            Candle::new(
+                start + idx as i64 * step,
+                *close,
+                *high,
+                *low,
+                *close,
+                100.0,
+            )
+        })
+        .collect()
+}
+
+/// EMAs that cross up at bar 1 and down at bar 5.
+async fn seed_crossings(pool: &SqlitePool, symbol: &str) {
+    let bars = crossing_fixture();
+    db::upsert_candles(pool, symbol, Timeframe::D1, &bars)
+        .await
+        .unwrap();
+    let emas: Vec<(i64, Option<f64>, Option<f64>)> = [
+        (None, None),
+        (Some(101.0), Some(100.0)),
+        (Some(102.0), Some(100.0)),
+        (Some(104.0), Some(101.0)),
+        (Some(105.0), Some(102.0)),
+        (Some(100.0), Some(103.0)),
+        (Some(98.0), Some(102.0)),
+        (Some(96.0), Some(101.0)),
+    ]
+    .iter()
+    .zip(bars.iter())
+    .map(|((fast, slow), bar)| (bar.open_time, *fast, *slow))
+    .collect();
+    db::replace_indicators(pool, symbol, Timeframe::D1, &emas)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn crossings_lists_every_flip_newest_first_with_its_run() {
+    let db_handle = test_db().await;
+    seed_crossings(&db_handle.pool, "SOLUSDT").await;
+
+    let app = build_app(db_handle.pool.clone(), FakeSource::new(Vec::new()));
+    let (status, body) = call(&app, "GET", "/api/crossings?symbol=SOLUSDT&timeframe=D1").await;
+    assert_eq!(status, StatusCode::OK);
+
+    let rows = body["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 2, "one up cross, one down cross");
+
+    let down = &rows[0];
+    assert_eq!(down["symbol"], "SOLUSDT");
+    assert_eq!(down["timeframe"], "D1");
+    assert_eq!(down["direction"], "down");
+    assert_eq!(down["open"], true, "no opposite cross yet");
+    assert_eq!(down["price"], 103.0);
+    assert_eq!(
+        down["crossed_at"].as_i64(),
+        Some((day_start() + 5 * Timeframe::D1.bucket_ms()) / 1000)
+    );
+    assert!(down["peak_pct"].as_f64().unwrap() > 0.0);
+    assert_eq!(down["days_to_peak"], 2.0);
+
+    let up = &rows[1];
+    assert_eq!(up["direction"], "up");
+    assert_eq!(up["open"], false);
+    assert!(
+        (up["peak_pct"].as_f64().unwrap() - 8.0).abs() < 1e-9,
+        "high 108 from a close of 100"
+    );
+    assert_eq!(up["days_to_peak"], 2.0);
+    assert!(
+        (up["trough_pct"].as_f64().unwrap() + 1.0).abs() < 1e-9,
+        "low 99 before the peak"
+    );
+    assert!((up["trough_to_peak_pct"].as_f64().unwrap() - 9.090_909).abs() < 1e-4);
+    assert!(
+        (up["exit_pct"].as_f64().unwrap() - 3.0).abs() < 1e-9,
+        "the run closed at 103"
+    );
+    assert_eq!(up["run_bars"], 3);
+    assert_eq!(up["run_days"], 3.0);
+}
+
+#[tokio::test]
+async fn crossings_summarises_by_timeframe_and_asset() {
+    let db_handle = test_db().await;
+    seed_crossings(&db_handle.pool, "SOLUSDT").await;
+    seed_crossings(&db_handle.pool, "BTCUSDT").await;
+
+    let app = build_app(db_handle.pool.clone(), FakeSource::new(Vec::new()));
+    let (_, body) = call(&app, "GET", "/api/crossings").await;
+
+    let summaries = body["summaries"].as_array().unwrap();
+    assert_eq!(summaries.len(), 3, "one total plus one per asset, D1 only");
+
+    let total = &summaries[0];
+    assert_eq!(total["timeframe"], "D1");
+    assert!(
+        total["symbol"].is_null(),
+        "the first entry covers every asset"
+    );
+    assert_eq!(total["crossings"], 4);
+    assert_eq!(total["ups"], 2);
+    assert_eq!(total["downs"], 2);
+    assert_eq!(total["open_runs"], 2);
+    let down_peak = (1.0 - 96.0 / 103.0) * 100.0;
+    let expected_peak = (8.0 * 2.0 + down_peak * 2.0) / 4.0;
+    assert!((total["avg_peak_pct"].as_f64().unwrap() - expected_peak).abs() < 1e-9);
+    assert_eq!(total["median_days_to_peak"], 2.0);
+    assert!(
+        (total["avg_exit_pct"].as_f64().unwrap() - 3.0).abs() < 1e-9,
+        "only the closed runs count"
+    );
+
+    let own = summaries
+        .iter()
+        .find(|summary| summary["symbol"] == "SOLUSDT")
+        .expect("a per-asset summary");
+    assert_eq!(own["crossings"], 2);
+    assert_eq!(own["timeframe"], "D1");
+}
+
+#[tokio::test]
+async fn crossings_is_empty_before_any_series_is_stored() {
+    let db_handle = test_db().await;
+    let app = build_app(db_handle.pool.clone(), FakeSource::new(Vec::new()));
+
+    let (status, body) = call(&app, "GET", "/api/crossings").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(body["rows"].as_array().unwrap().is_empty());
+    assert!(
+        body["summaries"].as_array().unwrap().is_empty(),
+        "nothing to average"
+    );
+}
+
+#[tokio::test]
+async fn crossings_rejects_unknown_symbols_and_timeframes() {
+    let db_handle = test_db().await;
+    let app = build_app(db_handle.pool.clone(), FakeSource::new(Vec::new()));
+
+    let (status, body) = call(&app, "GET", "/api/crossings?symbol=DOGE").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(body["error"].as_str().unwrap().contains("unknown symbol"));
+
+    let (status, body) = call(&app, "GET", "/api/crossings?timeframe=M15").await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["error"].as_str().unwrap().contains("H4 or D1"));
+}

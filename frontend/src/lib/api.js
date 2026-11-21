@@ -36,6 +36,14 @@ export function refreshPath(symbol) {
   return symbol ? `/api/refresh?symbol=${encodeURIComponent(String(symbol).toUpperCase())}` : '/api/refresh';
 }
 
+export function crossingsPath(symbol, timeframe) {
+  const params = new URLSearchParams();
+  if (symbol) params.set('symbol', String(symbol).toUpperCase());
+  if (timeframe) params.set('timeframe', String(timeframe).toUpperCase());
+  const query = params.toString();
+  return query ? `/api/crossings?${query}` : '/api/crossings';
+}
+
 async function request(path, { method = 'GET', signal } = {}) {
   let response;
   try {
@@ -81,6 +89,10 @@ export function fetchPivots(symbol, lookback = 15, signal) {
 
 export function triggerRefresh(symbol, signal) {
   return request(refreshPath(symbol), { method: 'POST', signal });
+}
+
+export function fetchCrossings(signal) {
+  return request(crossingsPath(), { signal });
 }
 
 export function fetchHealth(signal) {

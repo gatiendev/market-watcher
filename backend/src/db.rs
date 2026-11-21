@@ -266,20 +266,42 @@ pub async fn load_series(
     timeframe: Timeframe,
     limit: i64,
 ) -> Result<Vec<SeriesRow>> {
-    let rows = sqlx::query(
-        "SELECT c.open_time, c.open, c.high, c.low, c.close, c.volume,
+    load_series_rows(pool, symbol, timeframe, Some(limit)).await
+}
+
+/// Every stored bar with its EMAs, oldest first. Used where the whole history
+/// matters (crossings), not just the chart window.
+pub async fn load_series_all(
+    pool: &SqlitePool,
+    symbol: &str,
+    timeframe: Timeframe,
+) -> Result<Vec<SeriesRow>> {
+    load_series_rows(pool, symbol, timeframe, None).await
+}
+
+async fn load_series_rows(
+    pool: &SqlitePool,
+    symbol: &str,
+    timeframe: Timeframe,
+    limit: Option<i64>,
+) -> Result<Vec<SeriesRow>> {
+    const BASE: &str = "SELECT c.open_time, c.open, c.high, c.low, c.close, c.volume,
                 i.ema50 AS ema50, i.ema200 AS ema200
          FROM candles c
          LEFT JOIN indicators i
            ON i.symbol = c.symbol AND i.timeframe = c.timeframe AND i.open_time = c.open_time
          WHERE c.symbol = ? AND c.timeframe = ?
-         ORDER BY c.open_time DESC LIMIT ?",
-    )
-    .bind(symbol)
-    .bind(timeframe.as_str())
-    .bind(limit.clamp(1, 5000))
-    .fetch_all(pool)
-    .await?;
+         ORDER BY c.open_time DESC";
+    let sql = match limit {
+        Some(_) => format!("{BASE} LIMIT ?"),
+        None => BASE.to_string(),
+    };
+
+    let mut query = sqlx::query(&sql).bind(symbol).bind(timeframe.as_str());
+    if let Some(limit) = limit {
+        query = query.bind(limit.clamp(1, 5000));
+    }
+    let rows = query.fetch_all(pool).await?;
 
     let mut out = Vec::with_capacity(rows.len());
     for row in rows.iter().rev() {

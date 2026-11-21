@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
   candlesPath,
+  crossingsPath,
   fetchCandles,
   fetchMarkets,
   fetchPivots,
@@ -34,6 +35,12 @@ describe('paths', () => {
   it('builds the candle query', () => {
     const path = candlesPath('solusdt', 'h4', 200);
     expect(path).toBe('/api/candles?symbol=SOLUSDT&timeframe=H4&limit=200');
+  });
+
+  it('builds the crossings query, with or without filters', () => {
+    expect(crossingsPath()).toBe('/api/crossings');
+    expect(crossingsPath('btcusdt', 'h4')).toBe('/api/crossings?symbol=BTCUSDT&timeframe=H4');
+    expect(crossingsPath(null, 'D1')).toBe('/api/crossings?timeframe=D1');
   });
 
   it('builds refresh paths with and without a symbol', () => {

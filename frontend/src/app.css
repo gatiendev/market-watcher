@@ -240,7 +240,8 @@ button {
 /* ---------- panels ---------- */
 
 .watchlist,
-.chart-panel {
+.chart-panel,
+.panel {
   background: linear-gradient(180deg, rgba(19, 26, 35, 0.75), rgba(15, 20, 27, 0.92));
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -747,6 +748,191 @@ table.watch thead th.trend-head {
   animation: spin 0.8s linear infinite;
 }
 
+/* ---------- crossings page ---------- */
+
+.page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 100dvh;
+  gap: 14px;
+  padding: 0 16px 12px;
+}
+
+.page-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+}
+
+.nav-link {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-decoration: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  white-space: nowrap;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.nav-link:hover {
+  color: var(--text);
+  border-color: #39465a;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chip {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.chip:hover {
+  color: var(--text);
+}
+
+.chip[aria-pressed='true'] {
+  color: var(--text);
+  border-color: rgba(76, 154, 255, 0.5);
+  background: rgba(76, 154, 255, 0.12);
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 16px;
+  margin: 0;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.summary .stat b {
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary .stat b.up {
+  color: var(--up);
+}
+
+.summary .stat b.down {
+  color: var(--down);
+}
+
+.summary .stat b.flat {
+  color: var(--muted);
+}
+
+.panel-empty {
+  margin: 0;
+  padding: 18px 16px;
+  font-size: 12.5px;
+  color: var(--muted);
+  max-width: 70ch;
+}
+
+.cross-table-wrap {
+  overflow-x: auto;
+}
+
+table.crossings {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+table.crossings thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #101720;
+  padding: 8px 10px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+  text-align: right;
+  border-bottom: 1px solid var(--line-soft);
+  white-space: nowrap;
+}
+
+table.crossings thead th:first-child {
+  text-align: left;
+}
+
+table.crossings tbody tr {
+  border-bottom: 1px solid rgba(29, 38, 50, 0.5);
+  transition: background 0.14s ease;
+}
+
+table.crossings tbody tr:hover {
+  background: rgba(76, 154, 255, 0.06);
+}
+
+table.crossings td {
+  padding: 8px 10px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+table.crossings td:first-child {
+  text-align: left;
+}
+
+table.crossings td.asset .ticker {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+table.crossings td.asset .name {
+  display: block;
+  font-size: 10px;
+  color: var(--muted-2);
+}
+
+table.crossings td.when {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+table.crossings td.days {
+  color: #b9c3d1;
+}
+
+table.crossings .open-badge {
+  margin-left: 6px;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid rgba(76, 154, 255, 0.4);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
 /* ---------- footer / states ---------- */
 
 .footer {
@@ -800,6 +986,16 @@ table.watch thead th.trend-head {
     min-height: 100dvh;
     gap: 12px;
     padding: 0 10px 14px;
+  }
+
+  .page {
+    gap: 12px;
+    padding: 0 10px 14px;
+  }
+
+  /* Nine columns need room; the wrapper scrolls instead of squeezing them. */
+  table.crossings {
+    min-width: 720px;
   }
 
   .topbar {
@@ -861,6 +1057,11 @@ table.watch thead th.trend-head {
 
 /* Phones: keep all four watchlist columns on screen without horizontal scroll. */
 @media (max-width: 560px) {
+  .chip {
+    font-size: 10px;
+    padding: 4px 7px;
+  }
+
   .chart-head {
     gap: 10px 14px;
   }

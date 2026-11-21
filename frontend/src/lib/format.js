@@ -54,6 +54,12 @@ export function formatSpan(ms) {
   return `${Math.round(days / 365)}y`;
 }
 
+/** A duration in days: "0.3d", "3.5d", "12d". */
+export function formatDays(value) {
+  if (!isNumber(value)) return '—';
+  return `${value < 10 ? value.toFixed(1) : Math.round(value)}d`;
+}
+
 /** Chart arrow for the EMA 50 vs EMA 200 relationship. */
 export function trendGlyph(trend) {
   if (trend === 'up') return '▲';
@@ -67,14 +73,19 @@ export function changeClass(value) {
   return value > 0 ? 'up' : 'down';
 }
 
+/** Calendar day in UTC, e.g. "14 Nov 2026". */
+export function formatDate(ms) {
+  if (!isNumber(ms) || ms <= 0) return '—';
+  const date = new Date(ms);
+  return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+}
+
 /** Candle time in UTC, e.g. "14 Nov 2026 08:00 UTC". */
 export function formatBarTime(ms) {
   if (!isNumber(ms) || ms <= 0) return '—';
   const date = new Date(ms);
   const pad = (n) => String(n).padStart(2, '0');
-  return `${pad(date.getUTCDate())} ${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()} ${pad(
-    date.getUTCHours(),
-  )}:${pad(date.getUTCMinutes())} UTC`;
+  return `${formatDate(ms)} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())} UTC`;
 }
 
 /** "just now", "7 min ago", "3 h ago", "2 d ago". */

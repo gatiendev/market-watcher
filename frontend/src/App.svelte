@@ -217,6 +217,11 @@
     </div>
 
     <div class="controls">
+      <a
+        class="nav-link"
+        href="/crossings"
+        title="Every past EMA 50 / 200 crossing and what price did afterwards"
+      >Crossings</a>
       <div class="segmented" role="group" aria-label="Timeframe">
         {#each TIMEFRAMES as tf}
           <button aria-pressed={tf === timeframe} onclick={() => pickTimeframe(tf)}>{tf}</button>

@@ -173,6 +173,15 @@ afterEach(() => {
 });
 
 describe('App chart switching', () => {
+  it('links to the crossings page', async () => {
+    api.fetchMarkets.mockResolvedValue(markets());
+    api.fetchCandles.mockResolvedValue({ points: h4(20) });
+    const view = render(App);
+    await flush();
+
+    expect(view.container.querySelector('.nav-link').getAttribute('href')).toBe('/crossings');
+  });
+
   it('loads the default symbol and timeframe on boot', async () => {
     await boot();
     expect(candles.calls).toHaveLength(1);

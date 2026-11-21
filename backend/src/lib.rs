@@ -2,6 +2,7 @@
 
 pub mod aggregate;
 pub mod api;
+pub mod crossings;
 pub mod db;
 pub mod indicators;
 pub mod ingest;

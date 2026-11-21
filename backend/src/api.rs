@@ -15,6 +15,7 @@ use sqlx::SqlitePool;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
+use crate::crossings::{find_crossings, SeriesBar};
 use crate::db;
 use crate::indicators::pct_change;
 use crate::ingest::{Engine, RefreshReport};
@@ -123,6 +124,61 @@ pub struct PivotsResponse {
     pub pivots: Vec<PivotPoint>,
 }
 
+/// One past EMA 50 / EMA 200 crossing and what price did inside the run it opened.
+#[derive(Debug, Clone, Serialize)]
+pub struct CrossingRow {
+    pub symbol: String,
+    pub label: String,
+    pub decimals: u8,
+    pub timeframe: String,
+    /// "up" or "down" for the side the fast EMA crossed to.
+    pub direction: String,
+    /// Epoch seconds of the crossing bar (what the charting library expects).
+    pub crossed_at: i64,
+    /// Close of the crossing bar: the price every measurement starts from.
+    pub price: f64,
+    pub ema50: f64,
+    pub ema200: f64,
+    /// Best favourable excursion from `price`, in percent.
+    pub peak_pct: f64,
+    pub peak_bars: usize,
+    pub days_to_peak: f64,
+    /// Worst adverse excursion before the peak, in percent (<= 0).
+    pub trough_pct: f64,
+    /// Swing from that adverse extreme to the peak, in percent.
+    pub trough_to_peak_pct: f64,
+    pub run_bars: usize,
+    pub run_days: f64,
+    /// Close-to-close result of the run, direction-relative, in percent.
+    pub exit_pct: f64,
+    /// True while this is the current trend.
+    pub open: bool,
+}
+
+/// Aggregate of crossings for one timeframe, for one asset or all of them.
+#[derive(Debug, Clone, Serialize)]
+pub struct CrossingSummary {
+    pub timeframe: String,
+    /// `None` when the numbers cover every asset.
+    pub symbol: Option<String>,
+    pub crossings: usize,
+    pub ups: usize,
+    pub downs: usize,
+    pub open_runs: usize,
+    pub avg_peak_pct: Option<f64>,
+    pub median_days_to_peak: Option<f64>,
+    pub avg_trough_to_peak_pct: Option<f64>,
+    /// Average result of the runs that already ended with an opposite crossing.
+    pub avg_exit_pct: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CrossingsResponse {
+    pub generated_at: i64,
+    pub rows: Vec<CrossingRow>,
+    pub summaries: Vec<CrossingSummary>,
+}
+
 pub struct ApiError {
     status: StatusCode,
     message: String,
@@ -193,12 +249,19 @@ pub struct PivotsQuery {
     pub right: Option<usize>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct CrossingsQuery {
+    pub symbol: Option<String>,
+    pub timeframe: Option<String>,
+}
+
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/health", get(health))
         .route("/api/markets", get(markets))
         .route("/api/candles", get(candles))
         .route("/api/pivots", get(pivot_points))
+        .route("/api/crossings", get(crossing_overview))
         .route("/api/refresh", post(refresh))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
@@ -354,6 +417,153 @@ async fn pivot_points(
             })
             .collect(),
     }))
+}
+
+/// Every past EMA 50 / EMA 200 crossing, with the performance of the run each
+/// one opened. Defaults to all four assets on both timeframes; `symbol` and
+/// `timeframe` narrow it.
+async fn crossing_overview(
+    State(state): State<AppState>,
+    Query(query): Query<CrossingsQuery>,
+) -> Result<Json<CrossingsResponse>, ApiError> {
+    let specs: Vec<&SymbolSpec> = match query.symbol.as_deref() {
+        Some(raw) => vec![find_symbol(raw).ok_or_else(|| ApiError::not_found("unknown symbol"))?],
+        None => SYMBOLS.iter().collect(),
+    };
+    let timeframes: Vec<Timeframe> = match query.timeframe.as_deref() {
+        Some(raw) => vec![Timeframe::parse(raw)
+            .ok_or_else(|| ApiError::bad_request("timeframe must be H4 or D1"))?],
+        None => Timeframe::ALL.to_vec(),
+    };
+
+    let mut rows = Vec::new();
+    for spec in &specs {
+        for timeframe in &timeframes {
+            // The whole stored history: a crossing three years back still counts.
+            let series = db::load_series_all(&state.pool, spec.symbol, *timeframe).await?;
+            let bars: Vec<SeriesBar> = series
+                .iter()
+                .map(|row| SeriesBar {
+                    open_time: row.candle.open_time,
+                    high: row.candle.high,
+                    low: row.candle.low,
+                    close: row.candle.close,
+                    ema50: row.ema50,
+                    ema200: row.ema200,
+                })
+                .collect();
+
+            // Newest first, so the page reads as a timeline.
+            for crossing in find_crossings(&bars, *timeframe).iter().rev() {
+                rows.push(CrossingRow {
+                    symbol: spec.symbol.to_string(),
+                    label: spec.label.to_string(),
+                    decimals: spec.decimals,
+                    timeframe: timeframe.as_str().to_string(),
+                    direction: crossing.direction.as_str().to_string(),
+                    crossed_at: crossing.open_time.div_euclid(1000),
+                    price: crossing.price,
+                    ema50: crossing.ema50,
+                    ema200: crossing.ema200,
+                    peak_pct: crossing.peak_pct,
+                    peak_bars: crossing.peak_bars,
+                    days_to_peak: crossing.days_to_peak,
+                    trough_pct: crossing.trough_pct,
+                    trough_to_peak_pct: crossing.trough_to_peak_pct,
+                    run_bars: crossing.run_bars,
+                    run_days: crossing.run_days,
+                    exit_pct: crossing.exit_pct,
+                    open: crossing.open,
+                });
+            }
+        }
+    }
+
+    let summaries = summarise(&rows, &specs, &timeframes);
+
+    Ok(Json(CrossingsResponse {
+        generated_at: chrono::Utc::now().timestamp_millis(),
+        rows,
+        summaries,
+    }))
+}
+
+/// One summary per timeframe across every asset in scope, then one per asset.
+fn summarise(
+    rows: &[CrossingRow],
+    specs: &[&SymbolSpec],
+    timeframes: &[Timeframe],
+) -> Vec<CrossingSummary> {
+    let mut out = Vec::new();
+    for timeframe in timeframes {
+        let in_scope: Vec<&CrossingRow> = rows
+            .iter()
+            .filter(|row| row.timeframe == timeframe.as_str())
+            .collect();
+        if in_scope.is_empty() {
+            continue;
+        }
+        out.push(summarise_one(timeframe, None, &in_scope));
+        for spec in specs {
+            let own: Vec<&CrossingRow> = in_scope
+                .iter()
+                .copied()
+                .filter(|row| row.symbol == spec.symbol)
+                .collect();
+            if !own.is_empty() {
+                out.push(summarise_one(timeframe, Some(spec.symbol), &own));
+            }
+        }
+    }
+    out
+}
+
+fn summarise_one(
+    timeframe: &Timeframe,
+    symbol: Option<&str>,
+    rows: &[&CrossingRow],
+) -> CrossingSummary {
+    let peak: Vec<f64> = rows.iter().map(|row| row.peak_pct).collect();
+    let days: Vec<f64> = rows.iter().map(|row| row.days_to_peak).collect();
+    let swing: Vec<f64> = rows.iter().map(|row| row.trough_to_peak_pct).collect();
+    let closed: Vec<f64> = rows
+        .iter()
+        .filter(|row| !row.open)
+        .map(|row| row.exit_pct)
+        .collect();
+
+    CrossingSummary {
+        timeframe: timeframe.as_str().to_string(),
+        symbol: symbol.map(str::to_string),
+        crossings: rows.len(),
+        ups: rows.iter().filter(|row| row.direction == "up").count(),
+        downs: rows.iter().filter(|row| row.direction == "down").count(),
+        open_runs: rows.iter().filter(|row| row.open).count(),
+        avg_peak_pct: mean(&peak),
+        median_days_to_peak: median(days),
+        avg_trough_to_peak_pct: mean(&swing),
+        avg_exit_pct: mean(&closed),
+    }
+}
+
+fn mean(values: &[f64]) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    Some(values.iter().sum::<f64>() / values.len() as f64)
+}
+
+fn median(mut values: Vec<f64>) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    values.sort_by(|a, b| a.total_cmp(b));
+    let middle = values.len() / 2;
+    if values.len().is_multiple_of(2) {
+        Some((values[middle - 1] + values[middle]) / 2.0)
+    } else {
+        Some(values[middle])
+    }
 }
 
 async fn refresh(

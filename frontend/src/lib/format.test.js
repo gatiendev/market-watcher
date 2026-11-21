@@ -3,6 +3,8 @@ import {
   changeClass,
   emaSpread,
   formatBarTime,
+  formatDate,
+  formatDays,
   formatPct,
   formatPrice,
   formatRelative,
@@ -90,6 +92,19 @@ describe('time formatting', () => {
     expect(formatBarTime(ms)).toBe('14 Nov 2026 08:05 UTC');
     expect(formatBarTime(0)).toBe('—');
     expect(formatBarTime(null)).toBe('—');
+  });
+
+  it('renders the calendar day alone', () => {
+    expect(formatDate(Date.UTC(2026, 10, 14, 8, 5))).toBe('14 Nov 2026');
+    expect(formatDate(0)).toBe('—');
+  });
+
+  it('renders a duration in days', () => {
+    expect(formatDays(0)).toBe('0.0d');
+    expect(formatDays(2)).toBe('2.0d');
+    expect(formatDays(2 / 6)).toBe('0.3d');
+    expect(formatDays(14)).toBe('14d');
+    expect(formatDays(null)).toBe('—');
   });
 
   it('renders relative freshness', () => {

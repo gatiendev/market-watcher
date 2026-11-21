@@ -39,9 +39,20 @@ API every 60s and has a manual **Refresh** button that hits the providers immedi
 | GET | `/api/health` | liveness + database check |
 | GET | `/api/markets` | watchlist rows: last price, change %, EMA50/EMA200, trend + where it started (`trend_since`, `trend_bars`), freshness, per timeframe |
 | GET | `/api/candles?symbol=SOLUSDT&timeframe=H4&limit=400` | candles + EMAs for the chart |
+| GET | `/api/pivots?symbol=SOLUSDT&lookback=15` | daily swing highs/lows, `left`/`right` optional |
+| GET | `/api/crossings[?symbol=SOLUSDT&timeframe=D1]` | every past EMA 50/200 cross with the performance of the run it opened |
 | POST | `/api/refresh[?symbol=ES1]` | force a download now |
 
 `timeframe` accepts `H4`/`4h`/`D1`/`1d`. Unknown symbols return 404, unknown timeframes 400.
+
+## Crossings page
+
+`/crossings` lists every past EMA 50 / EMA 200 flip on both timeframes, newest first, with what
+price did inside the run each cross opened: the best favourable move (peak), how many days that
+took, the worst adverse move before it, the swing from that extreme to the peak, and the run's
+result. A run lasts until the opposite crossing; the newest one is marked **open**. Every figure is
+direction-relative, so a positive number always means the signal worked. Each table carries the
+averages for the rows in it (median days to peak included), for all assets or one.
 
 ## Run it
 
