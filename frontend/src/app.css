@@ -998,7 +998,28 @@ table.crossings .open-badge {
   white-space: nowrap;
 }
 
-.now-age .since {
+.now-prices {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: -1px 0 5px 30px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-2);
+}
+
+.now-prices .arrow {
+  color: var(--muted-2);
+}
+
+.now-prices .now-price {
+  color: var(--text);
+}
+
+.now-prices .since {
+  margin-left: auto;
   color: var(--muted-2);
 }
 
@@ -1379,9 +1400,8 @@ table.crossings .open-badge {
     padding: 10px;
   }
 
-  /* The age is what matters on a phone; the date stays in the tooltip. */
-  .now-age .since {
-    display: none;
+  .now-prices {
+    margin-left: 30px;
   }
 
   /* Stacked on a phone: two values per timeframe never fit on one line. */

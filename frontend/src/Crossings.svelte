@@ -96,6 +96,11 @@
     return run.direction === 'down' ? -value : value;
   }
 
+  // The latest close, rebuilt from the crossing close and the run's result.
+  function currentPrice(run) {
+    return run.price * (1 + priceMove(run, run.exit_pct) / 100);
+  }
+
   function labelFor(symbol) {
     return rows.find((row) => row.symbol === symbol)?.label ?? '';
   }
@@ -195,9 +200,7 @@
                       {trendGlyph(run.direction)} {run.direction}
                     </span>
                     <span class="now-age" title={`Crossed ${formatBarTime(run.crossed_at * 1000)}`}>
-                      {formatDays(run.run_days)}<span class="since">
-                        {' '}· {formatDate(run.crossed_at * 1000)}</span
-                      >
+                      {formatDays(run.run_days)}
                     </span>
                     {@const nowPct = priceMove(run, run.exit_pct)}
                     {@const peakPct = priceMove(run, run.peak_pct)}
@@ -217,6 +220,14 @@
                     <span class="now-none">no crossing stored yet</span>
                   {/if}
                 </div>
+                {#if run}
+                  <div class="now-prices" title="Price at the crossing → latest price">
+                    <span class="at">{formatPrice(run.price, run.decimals)}</span>
+                    <span class="arrow">→</span>
+                    <span class="at now-price">{formatPrice(currentPrice(run), run.decimals)}</span>
+                    <span class="since">crossed {formatDate(run.crossed_at * 1000)}</span>
+                  </div>
+                {/if}
               {/each}
             </li>
           {/each}

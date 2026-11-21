@@ -299,6 +299,13 @@ describe('crossings page', () => {
     expect(solD1.textContent).toContain('+3.10%');
     expect(solD1.textContent).toContain('peak +4.20%');
 
+    // Both prices on the row: where the crossing fired, and where price is now.
+    const prices = assets[0].querySelectorAll('.now-prices');
+    expect(prices).toHaveLength(2);
+    expect(prices[0].textContent).toContain('100.00');
+    expect(prices[0].textContent).toContain('66.50');
+    expect(prices[1].textContent).toContain('103.10');
+
     // BTC has no stored D1 crossing, and the page says so instead of going blank.
     expect(assets[1].textContent).toContain('BTCUSDT');
     expect(assets[1].textContent).toContain('-2.50%');
