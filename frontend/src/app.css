@@ -1045,6 +1045,29 @@ table.crossings .open-badge {
   color: var(--muted-2);
 }
 
+/* The two extremes of the run, each with the price it printed at. */
+.now-extremes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: -1px 0 6px 30px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.now-extremes .k {
+  margin-right: 2px;
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.now-extremes .at {
+  color: var(--muted);
+}
+
 .now-pnl,
 .now-peak {
   font-family: var(--mono);
@@ -1534,6 +1557,10 @@ table.crossings .open-badge {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 9px 14px;
     margin: 11px 0 0;
+  }
+
+  .cross-card .card-metrics > div.wide {
+    grid-column: 1 / -1;
   }
 
   .cross-card .card-metrics > div {

@@ -219,17 +219,12 @@
                       {formatDays(run.run_days)}
                     </span>
                     {@const nowPct = priceMove(run, run.exit_pct)}
-                    {@const peakPct = priceMove(run, run.peak_pct)}
                     <span class="now-vals">
                       <span
                         class="now-pnl {changeClass(nowPct)}"
                         title="Price now against the crossing close"
                       >
                         <span class="k">now</span> {formatPct(nowPct)}
-                      </span>
-                      <span class="now-peak">
-                        <span class="k">{run.direction === 'down' ? 'trough' : 'peak'}</span>
-                        {formatPct(peakPct)}
                       </span>
                     </span>
                   {:else}
@@ -244,6 +239,22 @@
                     <span class="k">now</span>
                     <span class="at now-price">{formatPrice(currentPrice(run), run.decimals)}</span>
                     <span class="since">{formatDate(run.crossed_at * 1000)}</span>
+                  </div>
+                  {@const fig = figures(run)}
+                  <div
+                    class="now-extremes"
+                    title="The highest and lowest price of the run, against the crossing close"
+                  >
+                    <span class="ex">
+                      <span class="k">high</span>
+                      <span class="at">{formatPrice(highPrice(run), run.decimals)}</span>
+                      <span class={changeClass(fig.high)}>{formatPct(fig.high)}</span>
+                    </span>
+                    <span class="ex">
+                      <span class="k">low</span>
+                      <span class="at">{formatPrice(lowPrice(run), run.decimals)}</span>
+                      <span class={changeClass(fig.low)}>{formatPct(fig.low)}</span>
+                    </span>
                   </div>
                 {/if}
               {/each}
@@ -307,6 +318,9 @@
                     Swing
                   </th>
                   <th title="Days until the best price of the run">To best</th>
+                  <th title="How long the trend lasted, from this crossing to the next one">
+                    Length
+                  </th>
                   <th title="Price change from the crossing close to the end of the run">Result</th>
                 </tr>
               </thead>
@@ -349,6 +363,14 @@
                       )}`}
                     >
                       {formatDays(row.days_to_peak)}
+                    </td>
+                    <td
+                      class="num days length"
+                      title={row.open
+                        ? 'Still running: no opposite crossing yet'
+                        : `${row.run_bars} bars from this crossing to the next`}
+                    >
+                      {formatDays(row.run_days)}
                     </td>
                     <td class="num result">
                       <span class={changeClass(fig.result)}>{formatPct(fig.result)}</span>
@@ -407,6 +429,12 @@
                   <div>
                     <dt>Days to best</dt>
                     <dd>{formatDays(row.days_to_peak)}</dd>
+                  </div>
+                  <div class="wide">
+                    <dt>Duration</dt>
+                    <dd title={row.open ? 'Still running: no opposite crossing yet' : 'Crossing to the next crossing'}>
+                      {formatDays(row.run_days)}
+                    </dd>
                   </div>
                 </dl>
                 <div class="card-result">

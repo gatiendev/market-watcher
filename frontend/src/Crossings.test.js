@@ -164,6 +164,7 @@ describe('crossings page', () => {
       'Low',
       'Swing',
       'To best',
+      'Length',
       'Result',
     ]);
 
@@ -305,16 +306,18 @@ describe('crossings page', () => {
     // Price against the crossing, not the direction-relative result: a down trend
     // that paid 33.5% is price 33.5% lower, so it reads negative.
     expect(solH4.textContent).toContain('-33.50%');
-    // On a down run the best price is the low, so the figure is named for it.
-    expect(solH4.textContent).toContain('trough -37.60%');
-    expect(solH4.textContent).not.toContain('peak -37.60%');
+    // Both extremes of the run, each with the price it printed at: on a down
+    // run the low is the best price and the high is the pullback.
+    const ex = assets[0].querySelectorAll('.now-extremes');
+    expect(ex).toHaveLength(2);
+    expect(ex[0].textContent.replace(/\s+/g, ' ').trim()).toBe('high 101.00 +1.00% low 62.40 -37.60%');
     expect(solH4.textContent).not.toContain('+33.50%');
     expect(solD1.textContent).toContain('D1');
     expect(solD1.textContent).toContain('up');
     expect(solD1.textContent).toContain('5.0d');
     // An up trend whose price fell shows the fall, not a positive "result".
     expect(solD1.textContent).toContain('+3.10%');
-    expect(solD1.textContent).toContain('peak +4.20%');
+    expect(ex[1].textContent.replace(/\s+/g, ' ').trim()).toBe('high 104.20 +4.20% low 99.00 -1.00%');
 
     // Both prices on the row: where the crossing fired, and where price is now.
     const prices = assets[0].querySelectorAll('.now-prices');
@@ -351,7 +354,13 @@ describe('crossings page', () => {
     const cells = [...cards[0].querySelectorAll('.card-metrics > div')].map((d) =>
       d.textContent.replace(/\s+/g, ' ').trim(),
     );
-    expect(cells).toEqual(['High 101.00 +1.00%', 'Low 92.00 -8.00%', 'Swing -9.09%', 'Days to best 2.0d']);
+    expect(cells).toEqual([
+      'High 101.00 +1.00%',
+      'Low 92.00 -8.00%',
+      'Swing -9.09%',
+      'Days to best 2.0d',
+      'Duration 5.0d',
+    ]);
     expect(cards[1].textContent).toContain('+9.09%');
     // The down card carries the same sign flip as the table.
     expect(cards[0].textContent).toContain('+1.00%');

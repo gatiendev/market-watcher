@@ -48,16 +48,18 @@ API every 60s and has a manual **Refresh** button that hits the providers immedi
 ## Crossings page
 
 `/crossings` opens with **Right now**: one block per asset showing the trend in force on H4 *and* D1
-at once (direction, age in days, the price at the crossing and the latest price, the price now against
-the crossing close, and the best price the run reached), whatever the toggle is set to. Each row reads
+at once (direction, age in days, the price now against the crossing close, and the highest and lowest
+price the run reached with each one's move), whatever the toggle is set to. Each row reads
 `cross 103.88 → now 69.61`, both prices in the same small grey type, the `cross` and `now` labels
-saying which is which. The latest price is rebuilt from the crossing close and the run's result, so it
-always agrees with the figure next to it. On a down run the best price is the low, so the figure is
-named `trough`; on an up run it is the `peak`. Below it, the page lists every past EMA 50 / EMA 200
+saying which is which, then `high 109.20 +5.12%  low 64.87 -37.55%`. The latest price is rebuilt from
+the crossing close and the run's result, so it always agrees with the figure next to it. Below it, the
+page lists every past EMA 50 / EMA 200
 flip on H4 or D1 (the header toggle picks the table), newest crossing first across every asset, with
 what price did inside the run that cross opened: the highest and lowest price, the swing between
-them, how long the best price took, and the run's result. Each row shows the two prices that bracket
-the run - `cross 103.88 → next 69.77` - and the result is the move between them. A run lasts from the
+them, how long the best price took, how long the whole run lasted, and the run's result. Each row shows
+the two prices that bracket the run - `cross 103.88 → next 69.77` - and the result is the move between
+them; the cards also carry the price behind each high and low, the price first and the percentage under
+it. A run lasts from the
 crossing bar through the bar that prints the opposite crossing, because that close is where a user
 would have got out and it is the price the next run enters at; the newest run is marked **open** and
 its second price is the latest close.
