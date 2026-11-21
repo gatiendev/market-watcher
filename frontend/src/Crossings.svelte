@@ -101,6 +101,15 @@
     return run.price * (1 + priceMove(run, run.exit_pct) / 100);
   }
 
+  // The two extremes as prices, not just percentages off the crossing close.
+  function highPrice(row) {
+    return row.price * (1 + figures(row).high / 100);
+  }
+
+  function lowPrice(row) {
+    return row.price * (1 + figures(row).low / 100);
+  }
+
   // The price the run ended at: the close of the bar that printed the opposite
   // cross, which is also the price the next run entered at. While a run is open
   // there is no opposite cross yet, so it is the latest close.
@@ -377,11 +386,17 @@
                 <dl class="card-metrics">
                   <div>
                     <dt>High</dt>
-                    <dd class={changeClass(fig.high)}>{formatPct(fig.high)}</dd>
+                    <dd>
+                      <span class={changeClass(fig.high)}>{formatPct(fig.high)}</span>
+                      <span class="px">{formatPrice(highPrice(row), row.decimals)}</span>
+                    </dd>
                   </div>
                   <div>
                     <dt>Low</dt>
-                    <dd class={changeClass(fig.low)}>{formatPct(fig.low)}</dd>
+                    <dd>
+                      <span class={changeClass(fig.low)}>{formatPct(fig.low)}</span>
+                      <span class="px">{formatPrice(lowPrice(row), row.decimals)}</span>
+                    </dd>
                   </div>
                   <div>
                     <dt>Swing</dt>

@@ -1509,6 +1509,22 @@ table.crossings .open-badge {
     color: var(--muted-2);
   }
 
+  /* The percentage stays the headline; the price it happened at sits under it,
+     right aligned, so every metric cell has the same shape whatever its length. */
+  .cross-card .card-metrics dd {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cross-card .card-metrics dd .px {
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--muted);
+  }
+
   .cross-card .card-metrics {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
