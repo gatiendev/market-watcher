@@ -253,6 +253,25 @@ describe('crossings page', () => {
     expect(view.container.querySelector('.summary').textContent).toContain('avg high +1.00%');
   });
 
+  it('reports the median run length over finished runs only', async () => {
+    api.fetchCrossings.mockResolvedValue({
+      generated_at: T0 * 1000,
+      rows: [
+        crossing({ crossed_at: T0, run_days: 9, exit_pct: 2 }),
+        crossing({ crossed_at: T0 + 86_400, run_days: 2, exit_pct: -1 }),
+        crossing({ crossed_at: T0 + 172_800, run_days: 4, exit_pct: 5 }),
+        // Open runs are censored: 100 days so far must not pull the median up.
+        crossing({ crossed_at: T0 + 259_200, run_days: 100, open: true }),
+      ],
+      summaries: [summary()],
+    });
+    const view = render(Crossings);
+    await flush();
+
+    const stats = view.container.querySelector('.summary').textContent.replace(/\s+/g, ' ');
+    expect(stats).toContain('median run 4.0d');
+  });
+
   it('shows the trend in force on both timeframes, whatever the toggle says', async () => {
     const rows = [
       crossing({

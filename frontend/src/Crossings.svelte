@@ -78,6 +78,9 @@
       avgHigh: mean(list.map((fig) => fig.high)),
       avgLow: mean(list.map((fig) => fig.low)),
       medianDays: median(shown.map((row) => row.days_to_peak)),
+      // Only finished runs: an open run's length is "so far" and would drag it down.
+      closed: shown.filter((row) => !row.open).length,
+      medianRun: median(shown.filter((row) => !row.open).map((row) => row.run_days)),
       avgSwing: mean(list.map((fig) => Math.abs(fig.swing))),
     };
   });
@@ -293,6 +296,11 @@
                 avg low <b class={changeClass(summary.avgLow)}>{formatPct(summary.avgLow)}</b>
               </span>
               <span class="stat">median <b>{formatDays(summary.medianDays)}</b> to best</span>
+              {#if summary.closed > 0}
+                <span class="stat" title="Median length of a finished run, from its crossing to the next">
+                  median run <b>{formatDays(summary.medianRun)}</b>
+                </span>
+              {/if}
               <span class="stat" title="Average travel from the worst price to the best">
                 avg swing <b>{summary.avgSwing.toFixed(2)}%</b>
               </span>

@@ -70,7 +70,8 @@ in the order the market made it: **trough → peak** on an up run (buy the dip, 
 **peak → trough** on a down run (sell the high, cover the low). It is never the other way round.
 
 The summary line above the table is computed from the rows on screen: how many crossings, the up and
-down split, average high and low, median days to the best price, average swing, and how many runs are
+down split, average high and low, median days to the best price, median run length over the finished
+runs, average swing, and how many runs are
 still open. On a phone each crossing is a card instead of a table row (the same figures, stacked),
 shown 25 at a time behind a "show more" button, and the asset chips scroll sideways on one line. The
 header never widens the page: the brand and the way back share a row, the toggle and the chips wrap
