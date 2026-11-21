@@ -347,9 +347,11 @@ describe('crossings page', () => {
     expect(cards[0].querySelector('.card-sub .prices').textContent.replace(/\s+/g, ' ').trim()).toBe(
       '100.00 → 97.00',
     );
-    // Each extreme carries the price it printed at, not just the percentage.
-    const highs = [...cards[0].querySelectorAll('.card-metrics .px')].map((el) => el.textContent.trim());
-    expect(highs).toEqual(['101.00', '92.00']);
+    // Each extreme shows the price it printed at, with the percentage under it.
+    const cells = [...cards[0].querySelectorAll('.card-metrics > div')].map((d) =>
+      d.textContent.replace(/\s+/g, ' ').trim(),
+    );
+    expect(cells).toEqual(['High 101.00 +1.00%', 'Low 92.00 -8.00%', 'Swing -9.09%', 'Days to best 2.0d']);
     expect(cards[1].textContent).toContain('+9.09%');
     // The down card carries the same sign flip as the table.
     expect(cards[0].textContent).toContain('+1.00%');

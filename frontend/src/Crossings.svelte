@@ -387,15 +387,15 @@
                   <div>
                     <dt>High</dt>
                     <dd>
-                      <span class={changeClass(fig.high)}>{formatPct(fig.high)}</span>
-                      <span class="px">{formatPrice(highPrice(row), row.decimals)}</span>
+                      <span class="at">{formatPrice(highPrice(row), row.decimals)}</span>
+                      <span class="px {changeClass(fig.high)}">{formatPct(fig.high)}</span>
                     </dd>
                   </div>
                   <div>
                     <dt>Low</dt>
                     <dd>
-                      <span class={changeClass(fig.low)}>{formatPct(fig.low)}</span>
-                      <span class="px">{formatPrice(lowPrice(row), row.decimals)}</span>
+                      <span class="at">{formatPrice(lowPrice(row), row.decimals)}</span>
+                      <span class="px {changeClass(fig.low)}">{formatPct(fig.low)}</span>
                     </dd>
                   </div>
                   <div>
