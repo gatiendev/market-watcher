@@ -48,6 +48,14 @@
 
   let activeSummary = $derived(summaryFor(timeframe));
 
+  // The open run of each series is the trend in force right now, so the page can
+  // show both timeframes side by side instead of hiding one behind the toggle.
+  let nowSymbols = $derived([...new Set(visible.map((row) => row.symbol))]);
+
+  function openRun(symbol, tf) {
+    return visible.find((row) => row.open && row.symbol === symbol && row.timeframe === tf) ?? null;
+  }
+
   function labelFor(symbol) {
     return rows.find((row) => row.symbol === symbol)?.label ?? '';
   }
@@ -105,8 +113,8 @@
           >
         {/each}
       </div>
-      <a class="nav-link" href="/">← Dashboard</a>
     </div>
+    <a class="nav-link" href="/">← Dashboard</a>
   </header>
 
   <main class="page-body">
@@ -127,6 +135,52 @@
         </p>
       </section>
     {:else}
+      <section class="panel now">
+        <div class="panel-head">
+          <h2>Right now</h2>
+          <span class="hint">the trend in force on both timeframes</span>
+        </div>
+        <ul class="now-list">
+          {#each nowSymbols as symbol}
+            <li class="now-asset">
+              <div class="now-head">
+                <span class="ticker num">{symbol}</span>
+                <span class="name">{labelFor(symbol)}</span>
+              </div>
+              {#each TIMEFRAMES as tf}
+                {@const run = openRun(symbol, tf)}
+                <div class="now-row">
+                  <span class="now-tf">{tf}</span>
+                  {#if run}
+                    <span class="badge {run.direction}">
+                      {trendGlyph(run.direction)} {run.direction}
+                    </span>
+                    <span class="now-age" title={`Crossed ${formatBarTime(run.crossed_at * 1000)}`}>
+                      {formatDays(run.run_days)}<span class="since">
+                        {' '}· {formatDate(run.crossed_at * 1000)}</span
+                      >
+                    </span>
+                    <span class="now-vals">
+                      <span
+                        class="now-pnl {changeClass(run.exit_pct)}"
+                        title="Result so far, from the crossing close to the latest close"
+                      >
+                        <span class="k">now</span> {formatPct(run.exit_pct)}
+                      </span>
+                      <span class="now-peak">
+                        <span class="k">peak</span> {formatPct(run.peak_pct)}
+                      </span>
+                    </span>
+                  {:else}
+                    <span class="now-none">no crossing stored yet</span>
+                  {/if}
+                </div>
+              {/each}
+            </li>
+          {/each}
+        </ul>
+      </section>
+
       <section class="panel">
         <div class="panel-head">
           <h2>{timeframe} crossings</h2>

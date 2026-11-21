@@ -132,6 +132,13 @@ function tableRows(container) {
   return container.querySelectorAll('table.crossings tbody tr');
 }
 
+/** Panel headings, minus the "Right now" block that sits above them. */
+function crossingHeadings(container) {
+  return [...container.querySelectorAll('.panel-head h2')]
+    .map((node) => node.textContent.trim())
+    .filter((text) => text !== 'Right now');
+}
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -143,10 +150,7 @@ describe('crossings page', () => {
     const view = render(Crossings);
     await flush();
 
-    const headings = [...view.container.querySelectorAll('.panel-head h2')].map((node) =>
-      node.textContent.trim(),
-    );
-    expect(headings).toEqual(['H4 crossings']);
+    expect(crossingHeadings(view.container)).toEqual(['H4 crossings']);
 
     const rows = tableRows(view.container);
     expect(rows).toHaveLength(2);
@@ -165,7 +169,7 @@ describe('crossings page', () => {
     timeframeButton(view.container, 'D1').click();
     await flush();
 
-    expect(view.container.querySelector('.panel-head h2').textContent.trim()).toBe('D1 crossings');
+    expect(crossingHeadings(view.container)).toEqual(['D1 crossings']);
     const rows = tableRows(view.container);
     expect(rows).toHaveLength(1);
     expect(rows[0].textContent).toContain('+21.50%');
@@ -202,6 +206,67 @@ describe('crossings page', () => {
     expect(rows[0].textContent).toContain('BTCUSDT');
     expect([...rows].some((row) => row.textContent.includes('SOLUSDT'))).toBe(false);
     expect(view.container.querySelector('.summary').textContent).toContain('avg peak +5.00%');
+  });
+
+  it('shows the trend in force on both timeframes, whatever the toggle says', async () => {
+    const rows = [
+      crossing({
+        symbol: 'SOLUSDT',
+        timeframe: 'H4',
+        direction: 'down',
+        open: true,
+        run_days: 38,
+        exit_pct: 33.5,
+        peak_pct: 37.6,
+      }),
+      crossing({
+        symbol: 'SOLUSDT',
+        timeframe: 'D1',
+        direction: 'up',
+        open: true,
+        run_days: 5,
+        exit_pct: 3.1,
+        peak_pct: 4.2,
+      }),
+      crossing({
+        symbol: 'BTCUSDT',
+        label: 'BTC / USDT',
+        timeframe: 'H4',
+        direction: 'up',
+        open: true,
+        run_days: 12,
+        exit_pct: -2.5,
+        peak_pct: 6,
+      }),
+    ];
+    api.fetchCrossings.mockResolvedValue({
+      generated_at: T0 * 1000,
+      rows,
+      summaries: [summary({ crossings: 3, ups: 2, downs: 1, open_runs: 3 })],
+    });
+    const view = render(Crossings);
+    await flush();
+
+    // The toggle is on H4, yet the block still answers for D1.
+    expect(crossingHeadings(view.container)).toEqual(['H4 crossings']);
+
+    const now = view.container.querySelector('.now');
+    const assets = now.querySelectorAll('.now-asset');
+    expect(assets).toHaveLength(2);
+
+    const [solH4, solD1] = assets[0].querySelectorAll('.now-row');
+    expect(solH4.textContent).toContain('H4');
+    expect(solH4.textContent).toContain('down');
+    expect(solH4.textContent).toContain('38d');
+    expect(solH4.textContent).toContain('+33.50%');
+    expect(solH4.textContent).toContain('peak +37.60%');
+    expect(solD1.textContent).toContain('D1');
+    expect(solD1.textContent).toContain('up');
+    expect(solD1.textContent).toContain('5.0d');
+
+    // BTC has no stored D1 crossing, and the page says so instead of going blank.
+    expect(assets[1].textContent).toContain('BTCUSDT');
+    expect(assets[1].textContent).toContain('no crossing stored yet');
   });
 
   it('renders the same crossings as cards for a phone', async () => {

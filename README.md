@@ -47,14 +47,18 @@ API every 60s and has a manual **Refresh** button that hits the providers immedi
 
 ## Crossings page
 
-`/crossings` lists every past EMA 50 / EMA 200 flip on H4 or D1 (the header toggle picks the
-table), newest first, with what price did inside the run each cross opened: the best favourable
+`/crossings` opens with **Right now**: one block per asset showing the trend in force on H4 *and* D1
+at once (direction, age in days, the run's result so far, and its peak so far), whatever the toggle
+is set to. Below it, the page lists every past EMA 50 / EMA 200 flip on H4 or D1 (the header toggle
+picks the table), newest first, with what price did inside the run each cross opened: the best favourable
 move (peak), how many days that took, the worst adverse move before it, the swing from that extreme
 to the peak, and the run's result. A run lasts until the opposite crossing; the newest one is marked
 **open**. Every figure is direction-relative, so a positive number always means the signal worked.
 The table carries the averages for the rows in it (median days to peak included), for all assets or
 one. On a phone each crossing is a card instead of a table row (the same figures, stacked), shown 25
-at a time behind a "show more" button, and the asset chips scroll sideways on one line.
+at a time behind a "show more" button, and the asset chips scroll sideways on one line. The header
+never widens the page: the brand and the way back share a row, the toggle and the chips wrap under
+them, and a table too wide for the screen scrolls inside its own box.
 
 ## Run it
 
