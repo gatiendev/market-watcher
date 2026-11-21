@@ -1010,12 +1010,29 @@ table.crossings .open-badge {
   color: var(--muted-2);
 }
 
+.now-prices .k {
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
 .now-prices .arrow {
   color: var(--muted-2);
 }
 
+/* The price at the crossing is context, so it stays small and grey. */
+.now-prices .at {
+  font-size: 10.5px;
+  color: var(--muted-2);
+}
+
+/* The current price is the number people look for: bigger, bright, heavier. */
 .now-prices .now-price {
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text);
+  letter-spacing: -0.01em;
 }
 
 .now-prices .since {
@@ -1402,6 +1419,12 @@ table.crossings .open-badge {
 
   .now-prices {
     margin-left: 30px;
+  }
+
+  /* The date wraps under the prices at this width and floats loose; the age in
+     days already says how old the crossing is, and the tooltip keeps the date. */
+  .now-prices .since {
+    display: none;
   }
 
   /* Stacked on a phone: two values per timeframe never fit on one line. */
