@@ -48,8 +48,9 @@ API every 60s and has a manual **Refresh** button that hits the providers immedi
 ## Crossings page
 
 `/crossings` opens with **Right now**: one block per asset showing the trend in force on H4 *and* D1
-at once (direction, age in days, the run's result so far, and its peak so far), whatever the toggle
-is set to. Below it, the page lists every past EMA 50 / EMA 200 flip on H4 or D1 (the header toggle
+at once (direction, age in days, the price now against the crossing close, and how far price got),
+whatever the toggle is set to. Those two figures are plain price moves, so a down trend that paid
+reads negative - unlike the table below, whose figures are direction-relative. Below it, the page lists every past EMA 50 / EMA 200 flip on H4 or D1 (the header toggle
 picks the table), newest first, with what price did inside the run each cross opened: the best favourable
 move (peak), how many days that took, the worst adverse move before it, the swing from that extreme
 to the peak, and the run's result. A run lasts until the opposite crossing; the newest one is marked

@@ -258,14 +258,20 @@ describe('crossings page', () => {
     expect(solH4.textContent).toContain('H4');
     expect(solH4.textContent).toContain('down');
     expect(solH4.textContent).toContain('38d');
-    expect(solH4.textContent).toContain('+33.50%');
-    expect(solH4.textContent).toContain('peak +37.60%');
+    // Price against the crossing, not the direction-relative result: a down trend
+    // that paid 33.5% is price 33.5% lower, so it reads negative.
+    expect(solH4.textContent).toContain('-33.50%');
+    expect(solH4.textContent).toContain('peak -37.60%');
+    expect(solH4.textContent).not.toContain('+33.50%');
     expect(solD1.textContent).toContain('D1');
     expect(solD1.textContent).toContain('up');
     expect(solD1.textContent).toContain('5.0d');
+    // An up trend whose price fell shows the fall, not a positive "result".
+    expect(solD1.textContent).toContain('+3.10%');
 
     // BTC has no stored D1 crossing, and the page says so instead of going blank.
     expect(assets[1].textContent).toContain('BTCUSDT');
+    expect(assets[1].textContent).toContain('-2.50%');
     expect(assets[1].textContent).toContain('no crossing stored yet');
   });
 

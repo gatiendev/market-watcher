@@ -56,6 +56,12 @@
     return visible.find((row) => row.open && row.symbol === symbol && row.timeframe === tf) ?? null;
   }
 
+  // The run figures are direction-relative (positive = the signal paid). This block
+  // answers "where is price against the crossing", so a down trend reads negative.
+  function priceMove(run, value) {
+    return run.direction === 'down' ? -value : value;
+  }
+
   function labelFor(symbol) {
     return rows.find((row) => row.symbol === symbol)?.label ?? '';
   }
@@ -160,15 +166,17 @@
                         {' '}· {formatDate(run.crossed_at * 1000)}</span
                       >
                     </span>
+                    {@const nowPct = priceMove(run, run.exit_pct)}
+                    {@const peakPct = priceMove(run, run.peak_pct)}
                     <span class="now-vals">
                       <span
-                        class="now-pnl {changeClass(run.exit_pct)}"
-                        title="Result so far, from the crossing close to the latest close"
+                        class="now-pnl {changeClass(nowPct)}"
+                        title="Price now against the crossing close"
                       >
-                        <span class="k">now</span> {formatPct(run.exit_pct)}
+                        <span class="k">now</span> {formatPct(nowPct)}
                       </span>
                       <span class="now-peak">
-                        <span class="k">peak</span> {formatPct(run.peak_pct)}
+                        <span class="k">peak</span> {formatPct(peakPct)}
                       </span>
                     </span>
                   {:else}
