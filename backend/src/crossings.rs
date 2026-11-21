@@ -102,7 +102,10 @@ pub fn find_crossings(bars: &[SeriesBar], timeframe: Timeframe) -> Vec<Crossing>
             // was nothing to cross from yet.
             None => run = Some((index, direction)),
             Some((start, previous)) if previous != direction => {
-                if let Some(crossing) = measure(bars, start, previous, index, timeframe, false) {
+                // The run closes on the bar that prints the opposite cross: that
+                // close is where a user would have got out, and it is the price
+                // the next run enters at. `end` is exclusive, hence `index + 1`.
+                if let Some(crossing) = measure(bars, start, previous, index + 1, timeframe, false) {
                     out.push(crossing);
                 }
                 run = Some((index, direction));
@@ -121,6 +124,9 @@ pub fn find_crossings(bars: &[SeriesBar], timeframe: Timeframe) -> Vec<Crossing>
 }
 
 /// Measure the run that starts at `start` and ends before `end` (exclusive).
+///
+/// A closed run ends on the bar that prints the opposite cross, so its exit price
+/// is exactly the price the next run enters at.
 fn measure(
     bars: &[SeriesBar],
     start: usize,
@@ -275,10 +281,13 @@ mod tests {
         );
         assert!((up.trough_to_peak_pct - 9.090_909).abs() < 1e-4);
         assert_eq!(
-            up.run_bars, 3,
-            "bars 1..4, the run ends before the down cross"
+            up.run_bars, 4,
+            "bars 1..5, the run ends on the bar that prints the down cross"
         );
-        assert!((up.exit_pct - 3.0).abs() < 1e-9, "close 103 from 100");
+        assert!(
+            (up.exit_pct - 3.0).abs() < 1e-9,
+            "close 103 on the down cross from 100"
+        );
         assert!(!up.open);
     }
 

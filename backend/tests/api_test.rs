@@ -613,8 +613,8 @@ async fn crossings_lists_every_flip_newest_first_with_its_run() {
         (up["exit_pct"].as_f64().unwrap() - 3.0).abs() < 1e-9,
         "the run closed at 103"
     );
-    assert_eq!(up["run_bars"], 3);
-    assert_eq!(up["run_days"], 3.0);
+    assert_eq!(up["run_bars"], 4, "bars 1..5, ending on the down cross");
+    assert_eq!(up["run_days"], 4.0);
 }
 
 #[tokio::test]

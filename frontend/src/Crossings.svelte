@@ -101,6 +101,13 @@
     return run.price * (1 + priceMove(run, run.exit_pct) / 100);
   }
 
+  // The price the run ended at: the close of the bar that printed the opposite
+  // cross, which is also the price the next run entered at. While a run is open
+  // there is no opposite cross yet, so it is the latest close.
+  function exitPrice(row) {
+    return row.price * (1 + figures(row).result / 100);
+  }
+
   function labelFor(symbol) {
     return rows.find((row) => row.symbol === symbol)?.label ?? '';
   }
@@ -221,11 +228,13 @@
                   {/if}
                 </div>
                 {#if run}
-                  <div class="now-prices" title="Price at the crossing → latest price">
+                  <div class="now-prices" title="Price at the crossing, then the latest price">
+                    <span class="k">cross</span>
                     <span class="at">{formatPrice(run.price, run.decimals)}</span>
                     <span class="arrow">→</span>
+                    <span class="k">now</span>
                     <span class="at now-price">{formatPrice(currentPrice(run), run.decimals)}</span>
-                    <span class="since">crossed {formatDate(run.crossed_at * 1000)}</span>
+                    <span class="since">{formatDate(run.crossed_at * 1000)}</span>
                   </div>
                 {/if}
               {/each}
@@ -280,7 +289,9 @@
                   <th>Asset</th>
                   <th>Crossed</th>
                   <th>Dir</th>
-                  <th>Price</th>
+                  <th title="Price at the crossing, then the price at the next crossing (the latest price while the run is open)">
+                    Cross → next
+                  </th>
                   <th title="Highest price of the run, against the crossing close">High</th>
                   <th title="Lowest price of the run, against the crossing close">Low</th>
                   <th title="From the adverse extreme to the best price: trough → peak on up runs, peak → trough on down runs">
@@ -306,7 +317,17 @@
                         {trendGlyph(row.direction)} {row.direction}
                       </span>
                     </td>
-                    <td class="num">{formatPrice(row.price, row.decimals)}</td>
+                    <td
+                      class="num prices"
+                      title={`${formatPrice(row.price, row.decimals)} at the crossing → ${formatPrice(
+                        exitPrice(row),
+                        row.decimals,
+                      )} ${row.open ? 'now, still open' : 'at the next crossing'}`}
+                    >
+                      <span class="at">{formatPrice(row.price, row.decimals)}</span>
+                      <span class="arrow">→</span>
+                      <span class="at">{formatPrice(exitPrice(row), row.decimals)}</span>
+                    </td>
                     <td class="num {changeClass(fig.high)}">{formatPct(fig.high)}</td>
                     <td class="num {changeClass(fig.low)}">{formatPct(fig.low)}</td>
                     <td class="num swing {changeClass(fig.swing)}" title={swingLabel(row.direction)}>
@@ -347,7 +368,11 @@
                   <span class="when" title={formatBarTime(row.crossed_at * 1000)}>
                     {formatDate(row.crossed_at * 1000)}
                   </span>
-                  <span class="at num">{formatPrice(row.price, row.decimals)}</span>
+                  <span class="prices num" title="Price at the crossing → price at the next crossing">
+                    <span class="at">{formatPrice(row.price, row.decimals)}</span>
+                    <span class="arrow">→</span>
+                    <span class="at">{formatPrice(exitPrice(row), row.decimals)}</span>
+                  </span>
                 </div>
                 <dl class="card-metrics">
                   <div>
@@ -398,6 +423,8 @@
     <span>A run ends at the opposite crossing</span>
     <span class="sep"></span>
     <span>High, low and result are price against the crossing close</span>
+    <span class="sep"></span>
+    <span>Result runs from a crossing to the next one</span>
     <span class="sep"></span>
     <span>Swing runs from the worst price to the best, in the order they happened</span>
     <span class="sep"></span>

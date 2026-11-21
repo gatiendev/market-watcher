@@ -155,10 +155,27 @@ describe('crossings page', () => {
     const headers = [...view.container.querySelectorAll('table.crossings thead th')].map((th) =>
       th.textContent.trim(),
     );
-    expect(headers).toEqual(['Asset', 'Crossed', 'Dir', 'Price', 'High', 'Low', 'Swing', 'To best', 'Result']);
+    expect(headers).toEqual([
+      'Asset',
+      'Crossed',
+      'Dir',
+      'Cross → next',
+      'High',
+      'Low',
+      'Swing',
+      'To best',
+      'Result',
+    ]);
 
     const rows = tableRows(view.container);
     expect(rows).toHaveLength(2);
+    // Every row carries the price at the crossing and the price at the next one.
+    expect(rows[0].querySelector('td.prices').textContent.replace(/\s+/g, ' ').trim()).toBe(
+      '100.00 → 97.00',
+    );
+    expect(rows[1].querySelector('td.prices').textContent.replace(/\s+/g, ' ').trim()).toBe(
+      '100.00 → 103.00',
+    );
     expect(rows[0].textContent).toContain('BTCUSDT');
     expect(rows[0].textContent).toContain('open');
     expect(rows[1].textContent).toContain('+8.00%');
@@ -302,9 +319,11 @@ describe('crossings page', () => {
     // Both prices on the row: where the crossing fired, and where price is now.
     const prices = assets[0].querySelectorAll('.now-prices');
     expect(prices).toHaveLength(2);
-    expect(prices[0].textContent).toContain('100.00');
-    expect(prices[0].textContent).toContain('66.50');
-    expect(prices[1].textContent).toContain('103.10');
+    expect(prices[0].textContent).toContain('cross 100.00');
+    expect(prices[0].textContent).toContain('now 66.50');
+    expect(prices[1].textContent).toContain('now 103.10');
+    // The label sits on the current price, not on the crossing one.
+    expect(prices[0].querySelector('.now-price').textContent.trim()).toBe('66.50');
 
     // BTC has no stored D1 crossing, and the page says so instead of going blank.
     expect(assets[1].textContent).toContain('BTCUSDT');
@@ -325,6 +344,9 @@ describe('crossings page', () => {
     expect(cards[1].textContent).toContain('2.0d');
     expect(cards[1].textContent).toContain('Result');
     expect(cards[1].textContent).toContain('Swing');
+    expect(cards[0].querySelector('.card-sub .prices').textContent.replace(/\s+/g, ' ').trim()).toBe(
+      '100.00 → 97.00',
+    );
     expect(cards[1].textContent).toContain('+9.09%');
     // The down card carries the same sign flip as the table.
     expect(cards[0].textContent).toContain('+1.00%');

@@ -56,8 +56,11 @@ always agrees with the figure next to it. On a down run the best price is the lo
 named `trough`; on an up run it is the `peak`. Below it, the page lists every past EMA 50 / EMA 200
 flip on H4 or D1 (the header toggle picks the table), newest crossing first across every asset, with
 what price did inside the run that cross opened: the highest and lowest price, the swing between
-them, how long the best price took, and the run's result. A run lasts until the opposite crossing;
-the newest one is marked **open**.
+them, how long the best price took, and the run's result. Each row shows the two prices that bracket
+the run - `cross 103.88 → next 69.77` - and the result is the move between them. A run lasts from the
+crossing bar through the bar that prints the opposite crossing, because that close is where a user
+would have got out and it is the price the next run enters at; the newest run is marked **open** and
+its second price is the latest close.
 
 Every figure is price against the crossing close, never direction-relative, so a down run reads
 negative the way the price actually moved. The swing is the trade a user could actually have taken,

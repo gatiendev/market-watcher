@@ -903,6 +903,16 @@ table.crossings td {
   white-space: nowrap;
 }
 
+/* Two prices on one row: where the crossing fired, then where it ended. */
+table.crossings td.prices {
+  color: #b9c3d1;
+}
+
+table.crossings td.prices .arrow {
+  padding: 0 3px;
+  color: var(--muted-2);
+}
+
 table.crossings td:first-child {
   text-align: left;
 }
@@ -1180,7 +1190,7 @@ table.crossings .open-badge {
   /* Nine columns are too many for this width: the table scrolls inside its own
      box, and the page itself must not grow. */
   table.crossings {
-    min-width: 640px;
+    min-width: 780px;
   }
 
   .topbar {
@@ -1485,6 +1495,18 @@ table.crossings .open-badge {
   .cross-card .card-sub .at {
     color: #b9c3d1;
     font-variant-numeric: tabular-nums;
+  }
+
+  .cross-card .card-sub .prices {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    white-space: nowrap;
+    color: #b9c3d1;
+  }
+
+  .cross-card .card-sub .prices .arrow {
+    color: var(--muted-2);
   }
 
   .cross-card .card-metrics {
