@@ -1027,13 +1027,8 @@ table.crossings .open-badge {
   color: var(--muted-2);
 }
 
-/* The current price is the number people look for: bigger, bright, heavier. */
-.now-prices .now-price {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  letter-spacing: -0.01em;
-}
+/* Both prices share that grey; the `cross` / `now` labels say which is which.
+   The .now-price class stays as the hook that marks the current price. */
 
 .now-prices .since {
   margin-left: auto;

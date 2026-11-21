@@ -50,9 +50,9 @@ API every 60s and has a manual **Refresh** button that hits the providers immedi
 `/crossings` opens with **Right now**: one block per asset showing the trend in force on H4 *and* D1
 at once (direction, age in days, the price at the crossing and the latest price, the price now against
 the crossing close, and the best price the run reached), whatever the toggle is set to. Each row reads
-`cross 103.88 → now 69.60`: the current price is the big bright number, the crossing price small and
-grey beside it. The latest price is rebuilt from the crossing close and the run's result, so it always
-agrees with the figure next to it. On a down run the best price is the low, so the figure is
+`cross 103.88 → now 69.61`, both prices in the same small grey type, the `cross` and `now` labels
+saying which is which. The latest price is rebuilt from the crossing close and the run's result, so it
+always agrees with the figure next to it. On a down run the best price is the low, so the figure is
 named `trough`; on an up run it is the `peak`. Below it, the page lists every past EMA 50 / EMA 200
 flip on H4 or D1 (the header toggle picks the table), newest crossing first across every asset, with
 what price did inside the run that cross opened: the highest and lowest price, the swing between
